@@ -85,6 +85,8 @@ export class MockNotesSource implements NotesSource {
 		for (const [slug, file] of this.fileBySlug) {
 			const raw = await readFile(file, 'utf-8');
 			const note = buildNote(raw, slug);
+			// Skip private notes
+			if (note.visibility === 'private') continue;
 			out.push({
 				slug: note.slug,
 				title: note.title,

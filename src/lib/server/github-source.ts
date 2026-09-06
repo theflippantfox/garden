@@ -179,6 +179,9 @@ export class GitHubNotesSource implements NotesSource {
 			const slug = this.deriveSlug(entry.path);
 			const note = buildNote(content, slug);
 
+			// Skip private notes — they don't appear in the index
+			if (note.visibility === 'private') continue;
+
 			// Index by filename-derived slug for O(1) lookup
 			const indexSlug = slug.toLowerCase();
 			newSlugIndex.set(indexSlug, entry);
