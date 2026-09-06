@@ -9,7 +9,7 @@
 <ul class="notes">
 	{#each data.notes as note (note.slug)}
 		<li>
-			<a href={`/notes/${note.slug}`}>{note.title}</a>
+			<a href={`/notes/${note.slug}`}>{note.slug}</a>
 			{#if note.date}<small class="muted"> · {note.date}</small>{/if}
 			{#if note.excerpt}<p class="excerpt">{note.excerpt}</p>{/if}
 		</li>

@@ -6,7 +6,7 @@
 </script>
 
 <svelte:head>
-	<title>{note.title} — Garden</title>
+	<title>{note.slug} — Garden</title>
 	{#if note.excerpt}
 		<meta name="description" content={note.excerpt} />
 	{/if}
@@ -14,7 +14,7 @@
 
 <article class="prose">
 	<header>
-		<h1>{note.title}</h1>
+		<h1>{note.slug}</h1>
 		<div class="meta">
 			{#if note.date}<span>{note.date}</span>{/if}
 			{#if note.tags.length > 0}
