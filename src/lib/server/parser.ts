@@ -42,8 +42,7 @@ function renderWikiLinks(markdown: string): string {
 	return markdown.replace(WIKI_LINK_RE, (match, target, alias) => {
 		const slug = target.trim();
 		const text = alias ? alias.trim() : target.trim();
-		// No href — navigation handled entirely by pane click listener
-		return `<a class="wiki" data-slug="${slug}">${text}</a>`;
+		return `<button class="wiki-link" data-slug="${slug}">${text}</button>`;
 	});
 }
 

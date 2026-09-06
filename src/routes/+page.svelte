@@ -88,7 +88,7 @@
 	onMount(() => {
 		const handler = (e: MouseEvent) => {
 			const target = e.target as HTMLElement;
-			const a = target?.closest?.('a.wiki');
+			const a = target?.closest?.('button.wiki-link, a.wiki');
 			if (a) {
 				e.preventDefault();
 				const slug = a.getAttribute('data-slug');
@@ -388,8 +388,14 @@
 
 	.prose :global(p) { margin: 0 0 1rem; }
 	.prose :global(a) { color: #60a5fa; }
-	.prose :global(a.wiki) { color: #a78bfa; }
-	.prose :global(a.wiki:hover) { color: #c4b5fd; text-decoration: underline; }
+	.prose :global(a.wiki), .prose :global(button.wiki-link) {
+		color: #a78bfa;
+		cursor: pointer;
+	}
+	.prose :global(a.wiki:hover), .prose :global(button.wiki-link:hover) {
+		color: #c4b5fd;
+		text-decoration: underline;
+	}
 	.prose :global(strong) { color: #f4f4f5; font-weight: 600; }
 	.prose :global(em) { color: #e4e4e7; }
 	.prose :global(code) { font-family: 'JetBrains Mono', monospace; font-size: 0.875em; }
