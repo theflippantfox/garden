@@ -25,6 +25,7 @@
 	let loadingRight = $state(false);
 	let loadingLeft = $state(false);
 	let searchQuery = $state('');
+	let lastOpenedSlug = '';
 
 	let filteredNotes = $derived(
 		(data.notes ?? [])
@@ -59,13 +60,15 @@
 	}
 
 	async function openFromRightPane(slug: string) {
-		if (slug === rightNote?.slug) return; // already reading this note
+		if (slug === rightNote?.slug) return;
+		lastOpenedSlug = slug;
 		loadingLeft = true;
 		try {
 			const next = await loadNote(slug);
 			if (next) {
 				leftNote = rightNote;
 				rightNote = next;
+				if (window.location.hash) history.replaceState(null, '', window.location.pathname);
 			}
 		} finally {
 			loadingLeft = false;
@@ -86,7 +89,7 @@
 		const match = window.location.hash.match(/^#\/notes\/(.+)$/);
 		if (match) {
 			const slug = decodeURIComponent(match[1]);
-			openFromRightPane(slug);
+			if (slug !== lastOpenedSlug) openFromRightPane(slug);
 		}
 	}
 
