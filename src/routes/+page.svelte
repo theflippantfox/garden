@@ -1,10 +1,3 @@
-<!--
-  Home: dual-pane note navigation.
-  - Left pane: previous note (or empty)
-  - Right pane: current note being read
-  - Clicking sidebar: loads note in right pane (left becomes previous)
-  - Clicking right-pane wiki-link: shifts left→left, new note→right
--->
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { PageProps } from './$types';
@@ -20,10 +13,11 @@
 		backlinks: { slug: string; title: string }[];
 	};
 
-	let leftNote = $state<NoteData | null>(null);
-	let rightNote = $state<NoteData | null>(null);
-	let loadingRight = $state(false);
-	let loadingLeft = $state(false);
+	let mode = $state<'single' | 'split'>('single');
+	let primaryNote = $state<NoteData | null>(null);
+	let secondaryNote = $state<NoteData | null>(null);
+	let loadingPrimary = $state(false);
+	let loadingSecondary = $state(false);
 	let searchQuery = $state('');
 
 	let filteredNotes = $derived(
@@ -40,63 +34,49 @@
 		return res.json();
 	}
 
+	// Open from sidebar — always enters single mode
 	async function openFromSidebar(slug: string) {
-		if (!rightNote) {
-			loadingLeft = true;
-			try {
-				leftNote = await loadNote(slug);
-			} finally {
-				loadingLeft = false;
-			}
-		} else {
-			loadingRight = true;
-			try {
-				rightNote = await loadNote(slug);
-			} finally {
-				loadingRight = false;
-			}
+		if (slug === primaryNote?.slug) return;
+		loadingPrimary = true;
+		secondaryNote = null;
+		mode = 'single';
+		try {
+			primaryNote = await loadNote(slug);
+		} finally {
+			loadingPrimary = false;
 		}
 	}
 
-	async function openFromRightPane(slug: string) {
-		if (slug === rightNote?.slug) return;
-		if (!rightNote) {
-			// Right pane empty — load directly
-			loadingRight = true;
-			try {
-				rightNote = await loadNote(slug);
-			} finally {
-				loadingRight = false;
+	// Open wiki-link — enters split mode
+	async function openWikiLink(slug: string) {
+		if (slug === secondaryNote?.slug || slug === primaryNote?.slug) return;
+		loadingSecondary = true;
+		try {
+			const note = await loadNote(slug);
+			if (note) {
+				secondaryNote = note;
+				mode = 'split';
 			}
-		} else {
-			// Both panes occupied — shift right→left, new→right
-			loadingLeft = true;
-			try {
-				const next = await loadNote(slug);
-				if (next) {
-					leftNote = rightNote;
-					rightNote = next;
-				}
-			} finally {
-				loadingLeft = false;
-			}
+		} finally {
+			loadingSecondary = false;
 		}
 	}
 
-	function closeRightPane() {
-		rightNote = null;
+	function closeSecondary() {
+		secondaryNote = null;
+		mode = 'single';
 	}
 
-	function swapPanes() {
-		const tmp = leftNote;
-		leftNote = rightNote;
-		rightNote = tmp;
+	function swapNotes() {
+		const tmp = primaryNote;
+		primaryNote = secondaryNote;
+		secondaryNote = tmp;
 	}
 
 	onMount(() => {
 		const handler = (e: Event) => {
 			const slug = (e as CustomEvent).detail.slug as string;
-			openFromRightPane(slug);
+			openWikiLink(slug);
 		};
 		document.addEventListener('wiki-navigate', handler);
 		return () => document.removeEventListener('wiki-navigate', handler);
@@ -127,7 +107,7 @@
 					<li>
 						<button
 							class="note-item"
-							class:active={rightNote?.slug === note.slug || leftNote?.slug === note.slug}
+							class:active={primaryNote?.slug === note.slug || secondaryNote?.slug === note.slug}
 							onclick={() => openFromSidebar(note.slug)}
 						>
 							{note.slug}
@@ -142,51 +122,54 @@
 		</div>
 	</aside>
 
-	<div class="panes">
-		<!-- Left pane -->
-		<div class="pane pane-left">
-			{#if loadingLeft}
+	<main class="main" class:split={mode === 'split'}>
+		<!-- Primary pane -->
+		<div class="pane pane-primary">
+			{#if loadingPrimary}
 				<div class="pane-loading">Loading...</div>
-			{:else if leftNote}
+			{:else if primaryNote}
 				<div class="pane-header">
-					<span class="pane-label">Previous</span>
-					<button class="swap-btn" onclick={swapPanes} title="Swap panes">⇄</button>
+					<span class="pane-label">{mode === 'split' ? 'Primary' : 'Reading'}</span>
+					{#if mode === 'split'}
+						<button class="icon-btn" onclick={swapNotes} title="Swap panes">⇄</button>
+					{/if}
 				</div>
 				<div class="pane-content">
-					<div class="note-title-bar">{leftNote.slug}</div>
+					<div class="note-title-bar">{primaryNote.slug}</div>
 					<div class="prose">
-						{@html leftNote.html}
+						{@html primaryNote.html}
 					</div>
 				</div>
 			{:else}
 				<div class="pane-empty">
-					<span>← Select a note</span>
+					<div class="empty-icon">📖</div>
+					<p>Select a note from the sidebar</p>
 				</div>
 			{/if}
 		</div>
 
-		<!-- Right pane -->
-		<div class="pane pane-right">
-			{#if loadingRight}
+		<!-- Secondary pane (split mode only) -->
+		<div class="pane pane-secondary" class:visible={mode === 'split'}>
+			{#if loadingSecondary}
 				<div class="pane-loading">Loading...</div>
-			{:else if rightNote}
+			{:else if secondaryNote}
 				<div class="pane-header">
 					<span class="pane-label">Reading</span>
-					<button class="close-btn" onclick={closeRightPane} title="Close">✕</button>
+					<button class="icon-btn" onclick={closeSecondary} title="Close">✕</button>
 				</div>
 				<div class="pane-content">
-					<div class="note-title-bar">{rightNote.slug}</div>
+					<div class="note-title-bar">{secondaryNote.slug}</div>
 					<div class="prose">
-						{@html rightNote.html}
+						{@html secondaryNote.html}
 					</div>
 
-					{#if rightNote.backlinks && rightNote.backlinks.length > 0}
+					{#if secondaryNote.backlinks && secondaryNote.backlinks.length > 0}
 						<aside class="backlinks">
 							<h3>Linked from</h3>
 							<ul>
-								{#each (rightNote.backlinks ?? []).filter(bl => bl?.slug) as bl (bl.slug)}
+								{#each (secondaryNote.backlinks ?? []).filter(bl => bl?.slug) as bl (bl.slug)}
 									<li>
-										<button class="backlink-btn" onclick={() => openFromRightPane(bl.slug)}>
+										<button class="backlink-btn" onclick={() => openWikiLink(bl.slug)}>
 											{bl.slug}
 										</button>
 									</li>
@@ -197,12 +180,11 @@
 				</div>
 			{:else}
 				<div class="pane-empty">
-					<div class="empty-icon">📖</div>
-					<p>Select a note from the sidebar</p>
+					<p>Link opened here</p>
 				</div>
 			{/if}
 		</div>
-	</div>
+	</main>
 </div>
 
 <style>
@@ -213,6 +195,7 @@
 		overflow: hidden;
 	}
 
+	/* Sidebar */
 	.sidebar {
 		background: #0f0f14;
 		border-right: 1px solid #1f1f28;
@@ -242,6 +225,7 @@
 		color: #e4e4e7;
 		font-size: 0.9rem;
 		font-family: inherit;
+		transition: border-color 0.15s;
 	}
 	.search-box input:focus { outline: none; border-color: #60a5fa; background: #0f0f14; }
 	.search-box input::placeholder { color: #52525b; }
@@ -283,26 +267,39 @@
 		color: #3f3f46;
 	}
 
-	.panes {
+	/* Main / panes */
+	.main {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
+		grid-template-columns: 1fr;
 		overflow: hidden;
 		background: #0a0a0f;
+		transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	.main.split {
+		grid-template-columns: 1fr 1fr;
 	}
 
 	.pane {
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
-		border-right: 1px solid #1a1a24;
+		transition: opacity 0.3s ease, transform 0.3s ease;
 	}
-	.pane:last-child { border-right: none; }
+
+	.main:not(.split) .pane-secondary {
+		display: none;
+	}
+
+	.main.split .pane-secondary {
+		border-left: 1px solid #1a1a24;
+	}
 
 	.pane-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0.5rem 1rem;
+		padding: 0.625rem 1.25rem;
 		background: #0f0f14;
 		border-bottom: 1px solid #1a1a24;
 		flex-shrink: 0;
@@ -316,29 +313,29 @@
 		color: #52525b;
 	}
 
-	.swap-btn, .close-btn {
+	.icon-btn {
 		background: none;
 		border: none;
 		cursor: pointer;
 		color: #52525b;
-		font-size: 0.9rem;
-		padding: 0.2rem 0.4rem;
+		font-size: 1rem;
+		padding: 0.25rem 0.5rem;
 		border-radius: 4px;
-		transition: color 0.15s;
+		transition: color 0.15s, background 0.15s;
 	}
-	.swap-btn:hover, .close-btn:hover { color: #e4e4e7; }
+	.icon-btn:hover { color: #e4e4e7; background: #1a1a24; }
 
 	.pane-content {
 		flex: 1;
 		overflow-y: auto;
-		padding: 1.5rem;
+		padding: 1.5rem 2rem 2rem;
 	}
 
 	.note-title-bar {
 		font-family: 'JetBrains Mono', monospace;
 		font-size: 0.8rem;
 		color: #52525b;
-		margin-bottom: 1rem;
+		margin-bottom: 1.25rem;
 		padding-bottom: 0.75rem;
 		border-bottom: 1px solid #1a1a24;
 	}
@@ -352,7 +349,7 @@
 		color: #3f3f46;
 		gap: 0.5rem;
 	}
-	.empty-icon { font-size: 3rem; opacity: 0.4; }
+	.empty-icon { font-size: 3.5rem; opacity: 0.3; }
 	.pane-empty p { margin: 0; font-size: 0.9rem; }
 
 	.pane-loading {
@@ -364,11 +361,12 @@
 		font-size: 0.9rem;
 	}
 
-	/* Prose styles */
+	/* Prose */
 	.prose {
 		font-size: 1rem;
 		line-height: 1.75;
 		color: #d4d4d8;
+		max-width: 720px;
 	}
 
 	.prose :global(h1),
@@ -379,20 +377,14 @@
 		line-height: 1.3;
 		margin: 1.75rem 0 0.75rem;
 	}
-	.prose :global(h1) { font-size: 1.6rem; }
+	.prose :global(h1) { font-size: 1.75rem; }
 	.prose :global(h2) { font-size: 1.25rem; border-bottom: 1px solid #1f1f28; padding-bottom: 0.3rem; }
 	.prose :global(h3) { font-size: 1.05rem; }
 
 	.prose :global(p) { margin: 0 0 1rem; }
 	.prose :global(a) { color: #60a5fa; }
-	.prose :global(a.wiki), .prose :global(button.wiki-link) {
-		color: #a78bfa;
-		cursor: pointer;
-	}
-	.prose :global(a.wiki:hover), .prose :global(button.wiki-link:hover) {
-		color: #c4b5fd;
-		text-decoration: underline;
-	}
+	.prose :global(a.wiki) { color: #a78bfa; cursor: pointer; }
+	.prose :global(a.wiki:hover) { color: #c4b5fd; text-decoration: underline; }
 	.prose :global(strong) { color: #f4f4f5; font-weight: 600; }
 	.prose :global(em) { color: #e4e4e7; }
 	.prose :global(code) { font-family: 'JetBrains Mono', monospace; font-size: 0.875em; }
