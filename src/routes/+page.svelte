@@ -60,15 +60,26 @@
 
 	async function openFromRightPane(slug: string) {
 		if (slug === rightNote?.slug) return;
-		loadingLeft = true;
-		try {
-			const next = await loadNote(slug);
-			if (next) {
-				leftNote = rightNote;
-				rightNote = next;
+		if (!rightNote) {
+			// Right pane empty — load directly
+			loadingRight = true;
+			try {
+				rightNote = await loadNote(slug);
+			} finally {
+				loadingRight = false;
 			}
-		} finally {
-			loadingLeft = false;
+		} else {
+			// Both panes occupied — shift right→left, new→right
+			loadingLeft = true;
+			try {
+				const next = await loadNote(slug);
+				if (next) {
+					leftNote = rightNote;
+					rightNote = next;
+				}
+			} finally {
+				loadingLeft = false;
+			}
 		}
 	}
 
