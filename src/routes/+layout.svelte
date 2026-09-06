@@ -8,10 +8,29 @@
 	beforeNavigate(({ cancel, to }) => {
 		if (to?.url.hash.startsWith('#wiki-')) {
 			cancel();
-			// Dispatch custom event for the page to handle
 			document.dispatchEvent(new CustomEvent('wiki-navigate', { detail: { slug: to.url.hash.slice(1) } }));
 		}
 	});
+
+	// Svelte action: intercept wiki-link clicks in capture phase (before any other handlers)
+	function wikiNav(node: HTMLElement) {
+		function handler(e: Event) {
+			const target = e.target as Element;
+			if (!target?.closest?.('a.wiki')) return;
+			e.stopPropagation();
+			const hash = (target as HTMLAnchorElement).href.split('#')[1];
+			if (hash?.startsWith('wiki-')) {
+				e.preventDefault();
+				document.dispatchEvent(new CustomEvent('wiki-navigate', { detail: { slug: hash.slice(5) } }));
+			}
+		}
+		node.addEventListener('click', handler, true); // capture phase!
+		return {
+			destroy() {
+				node.removeEventListener('click', handler, true);
+			}
+		};
+	}
 </script>
 
 <svelte:head>
@@ -26,7 +45,7 @@
 </svelte:head>
 
 <!-- svelte-ignore a11y_autofocus -->
-<div class="app" data-sveltekit-preload-data="off">
+<div class="app" use:wikiNav data-sveltekit-preload-data="off">
 	{@render children()}
 </div>
 
