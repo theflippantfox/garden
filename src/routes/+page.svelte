@@ -6,7 +6,6 @@
   - Clicking right-pane wiki-link: shifts left→left, new note→right
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -25,7 +24,6 @@
 	let loadingRight = $state(false);
 	let loadingLeft = $state(false);
 	let searchQuery = $state('');
-	let lastOpenedSlug = '';
 
 	let filteredNotes = $derived(
 		(data.notes ?? [])
@@ -61,14 +59,12 @@
 
 	async function openFromRightPane(slug: string) {
 		if (slug === rightNote?.slug) return;
-		lastOpenedSlug = slug;
 		loadingLeft = true;
 		try {
 			const next = await loadNote(slug);
 			if (next) {
 				leftNote = rightNote;
 				rightNote = next;
-				if (window.location.hash) history.replaceState(null, '', window.location.pathname);
 			}
 		} finally {
 			loadingLeft = false;
@@ -85,19 +81,15 @@
 		rightNote = tmp;
 	}
 
-	function handleHashNavigation() {
-		const match = window.location.hash.match(/^#\/notes\/(.+)$/);
-		if (match) {
-			const slug = decodeURIComponent(match[1]);
-			if (slug !== lastOpenedSlug) openFromRightPane(slug);
+	function handleClick(e: MouseEvent, openFn: (slug: string) => void) {
+		const target = e.target as HTMLElement;
+		const a = target.closest('a');
+		if (a?.classList.contains('wiki')) {
+			e.preventDefault();
+			const slug = a.getAttribute('data-slug');
+			if (slug) openFn(slug);
 		}
 	}
-
-	onMount(() => {
-		handleHashNavigation();
-		window.addEventListener('hashchange', handleHashNavigation);
-		return () => window.removeEventListener('hashchange', handleHashNavigation);
-	});
 </script>
 
 <div class="home">
@@ -154,18 +146,7 @@
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
 						class="prose"
-						onclick={(e) => {
-							const target = e.target as HTMLElement;
-							const a = target.closest('a');
-							if (a?.classList.contains('wiki')) {
-								e.preventDefault();
-								const href = a.getAttribute('href');
-								if (href) {
-									const slug = decodeURIComponent(href.replace('/notes/', ''));
-									openFromRightPane(slug);
-								}
-							}
-						}}
+						onclick={(e) => handleClick(e, openFromRightPane)}
 					>
 						{@html leftNote.html}
 					</div>
@@ -191,18 +172,7 @@
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
 						class="prose"
-						onclick={(e) => {
-							const target = e.target as HTMLElement;
-							const a = target.closest('a');
-							if (a?.classList.contains('wiki')) {
-								e.preventDefault();
-								const href = a.getAttribute('href');
-								if (href) {
-									const slug = decodeURIComponent(href.replace('/notes/', ''));
-									openFromRightPane(slug);
-								}
-							}
-						}}
+						onclick={(e) => handleClick(e, openFromRightPane)}
 					>
 						{@html rightNote.html}
 					</div>
