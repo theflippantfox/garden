@@ -49,6 +49,7 @@ export interface ParsedNote {
 	content: string; // markdown body (frontmatter stripped)
 	html: string;
 	links: string[];
+	derivedTitle: string; // first heading from content (for display when no frontmatter title)
 }
 
 /**
@@ -84,16 +85,38 @@ export function parseMarkdown(raw: string, fallbackSlug?: string): ParsedNote {
 	const contentWithLinks = renderWikiLinks(content);
 	const html = marked.parse(contentWithLinks, { async: false }) as string;
 
-	return { frontmatter, content, html, links };
+	// Derive display title from first non-empty line of content if no frontmatter title
+	const derivedTitle = deriveTitleFromContent(content);
+
+	return { frontmatter, content, html, links, derivedTitle };
+}
+
+function deriveTitleFromContent(content: string): string {
+	// Strip markdown heading markers from first non-empty line
+	const lines = content.split('\n');
+	for (const line of lines) {
+		const stripped = line.replace(/^#+\s*/, '').trim();
+		if (!stripped) continue;
+		// Strip common inline markdown: bold, italic, links
+		const clean = stripped
+			.replace(/\*\*(.+?)\*\*/g, '$1') // **bold**
+			.replace(/\*(.+?)\*/g, '$1') // *italic*
+			.replace(/`(.+?)`/g, '$1') // `code`
+			.replace(/\[(.+?)\]\(.+?\)/g, '$1'); // [text](url)
+		if (clean) return clean;
+	}
+	return 'Untitled';
 }
 
 /** Build a Note record from raw markdown + slug. */
 export function buildNote(raw: string, slug: string, backlinks?: string[]): Note {
 	const parsed = parseMarkdown(raw, slug);
 	const fm = parsed.frontmatter;
+	// Use derived title (from content) when frontmatter didn't specify one
+	const title = fm.title === 'Untitled' && parsed.derivedTitle ? parsed.derivedTitle : fm.title;
 	return {
 		slug: fm.slug ?? slug,
-		title: fm.title,
+		title,
 		date: fm.date ?? '',
 		tags: fm.tags ?? [],
 		status: fm.status ?? 'active',

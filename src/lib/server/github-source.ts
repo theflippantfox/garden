@@ -52,11 +52,12 @@ async function fetchRepoTreeWithContent(): Promise<TreeEntry[]> {
 }
 
 /**
- * Decode base64 content from GitHub blob.
+ * Decode base64 content from GitHub blob and ensure UTF-8 encoding.
  */
 function decodeContent(encoded: string): string {
-	// GitHub returns base64 with newline padding
-	return atob(encoded.replace(/\n/g, ''));
+	// Node atob() decodes base64 to a Latin-1 string (where each byte = one character).
+	// We need UTF-8, so we convert through Buffer.
+	return Buffer.from(encoded.replace(/\n/g, ''), 'base64').toString('utf8');
 }
 
 export class GitHubNotesSource implements NotesSource {
