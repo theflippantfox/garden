@@ -6,6 +6,7 @@
   - Clicking right-pane wiki-link: shifts left→left, new note→right
 -->
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -81,15 +82,28 @@
 		rightNote = tmp;
 	}
 
-	function handleClick(e: MouseEvent, openFn: (slug: string) => void) {
-		const target = e.target as HTMLElement;
-		const a = target.closest('a');
-		if (a?.classList.contains('wiki')) {
-			e.preventDefault();
-			const slug = a.getAttribute('data-slug');
-			if (slug) openFn(slug);
-		}
-	}
+	let leftPaneRef: HTMLDivElement;
+	let rightPaneRef: HTMLDivElement;
+
+	onMount(() => {
+		const handler = (e: MouseEvent) => {
+			const target = e.target as HTMLElement;
+			const a = target?.closest?.('a.wiki');
+			if (a) {
+				e.preventDefault();
+				const slug = a.getAttribute('data-slug');
+				if (slug) openFromRightPane(slug);
+			}
+		};
+
+		rightPaneRef?.addEventListener('click', handler);
+		leftPaneRef?.addEventListener('click', handler);
+
+		return () => {
+			rightPaneRef?.removeEventListener('click', handler);
+			leftPaneRef?.removeEventListener('click', handler);
+		};
+	});
 </script>
 
 <div class="home">
@@ -133,7 +147,7 @@
 
 	<div class="panes">
 		<!-- Left pane -->
-		<div class="pane pane-left">
+		<div class="pane pane-left" bind:this={leftPaneRef}>
 			{#if loadingLeft}
 				<div class="pane-loading">Loading...</div>
 			{:else if leftNote}
@@ -143,11 +157,7 @@
 				</div>
 				<div class="pane-content">
 					<div class="note-title-bar">{leftNote.slug}</div>
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div
-						class="prose"
-						onclick={(e) => handleClick(e, openFromRightPane)}
-					>
+					<div class="prose">
 						{@html leftNote.html}
 					</div>
 				</div>
@@ -159,7 +169,7 @@
 		</div>
 
 		<!-- Right pane -->
-		<div class="pane pane-right">
+		<div class="pane pane-right" bind:this={rightPaneRef}>
 			{#if loadingRight}
 				<div class="pane-loading">Loading...</div>
 			{:else if rightNote}
@@ -169,11 +179,7 @@
 				</div>
 				<div class="pane-content">
 					<div class="note-title-bar">{rightNote.slug}</div>
-					<!-- svelte-ignore a11y_no_static_element_interactions -->
-					<div
-						class="prose"
-						onclick={(e) => handleClick(e, openFromRightPane)}
-					>
+					<div class="prose">
 						{@html rightNote.html}
 					</div>
 
