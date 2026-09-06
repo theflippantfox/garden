@@ -37,14 +37,24 @@
 		return res.json();
 	}
 
-	// Open a note from the sidebar (resets left pane)
+	// Open a note from the sidebar
 	async function openFromSidebar(slug: string) {
-		loadingRight = true;
-		leftNote = null;
-		try {
-			rightNote = await loadNote(slug);
-		} finally {
-			loadingRight = false;
+		if (!rightNote) {
+			// First note — goes to left pane
+			loadingLeft = true;
+			try {
+				leftNote = await loadNote(slug);
+			} finally {
+				loadingLeft = false;
+			}
+		} else {
+			// Left pane occupied — new note goes to right, old right→left
+			loadingRight = true;
+			try {
+				rightNote = await loadNote(slug);
+			} finally {
+				loadingRight = false;
+			}
 		}
 	}
 
@@ -63,7 +73,6 @@
 	}
 
 	function closeRightPane() {
-		leftNote = null;
 		rightNote = null;
 	}
 
