@@ -83,7 +83,7 @@
 					{#each results as r (r.slug)}
 						<li>
 							<button class="note-item" onclick={(e) => openNote(r.slug, e)}>
-								<div class="note-title">{r.title}</div>
+								<div class="note-title">{r.slug}</div>
 								{#if r.excerpt}
 									<div class="note-excerpt">{r.excerpt}</div>
 								{/if}
@@ -106,7 +106,7 @@
 						{#each data.notes as note (note.slug)}
 							<li>
 								<button class="note-item" onclick={(e) => openNote(note.slug, e)}>
-									<div class="note-title">{note.title}</div>
+									<div class="note-title">{note.slug}</div>
 									<div class="note-meta">
 										{#if note.date}<span class="date">{note.date}</span>{/if}
 										{#if note.tags.length > 0}
@@ -146,7 +146,7 @@
 			<article class="note-view">
 				<button class="close-btn" onclick={closeNote}>✕</button>
 				<header>
-					<h1>{selectedNote.title}</h1>
+					<h1>{selectedNote.slug}</h1>
 					<div class="meta">
 						{#if selectedNote.date}
 							<span class="date">{selectedNote.date}</span>
