@@ -51,6 +51,18 @@ export interface ParsedNote {
 	links: string[];
 }
 
+/**
+ * Convert [[wiki-links]] to HTML <a> tags before markdown rendering.
+ * Syntax: [[target]] or [[target|display text]]
+ */
+function renderWikiLinks(markdown: string): string {
+	return markdown.replace(WIKI_LINK_RE, (match, target, alias) => {
+		const slug = slugify(target.trim());
+		const text = alias ? alias.trim() : target.trim();
+		return `<a href="/notes/${slug}" class="wiki">${text}</a>`;
+	});
+}
+
 export function parseMarkdown(raw: string, fallbackSlug?: string): ParsedNote {
 	const { data, content } = matter(raw);
 	const fm = data as Partial<NoteFrontmatter>;
@@ -68,7 +80,9 @@ export function parseMarkdown(raw: string, fallbackSlug?: string): ParsedNote {
 	};
 
 	const links = extractWikiLinks(content);
-	const html = marked.parse(content, { async: false }) as string;
+	// Convert wiki-links to HTML before markdown processing
+	const contentWithLinks = renderWikiLinks(content);
+	const html = marked.parse(contentWithLinks, { async: false }) as string;
 
 	return { frontmatter, content, html, links };
 }

@@ -1,0 +1,9 @@
+{
+  "buildCommand": "npm run build",
+  "framework": "sveltekit",
+  "installCommand": "npm install",
+  "env": {
+    "NOTES_SOURCE": "github",
+    "ALLOW_DEV_WEBHOOK": "false"
+  }
+}

@@ -7,109 +7,94 @@
 <svelte:head>
 	<link rel="icon" href={favicon} />
 	<title>Digital Garden</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com" />
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
+	<link
+		href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+		rel="stylesheet"
+	/>
 </svelte:head>
 
-<div class="layout">
-	<header>
-		<nav>
-			<a href="/" class="brand">🌱 Garden</a>
-			<div class="links">
-				<a href="/">Home</a>
-				<a href="/tags">Tags</a>
-			</div>
-		</nav>
-	</header>
-
-	<main>
-		{@render children()}
-	</main>
-
-	<footer>
-		<small>Built with SvelteKit · notes live in a GitHub repo</small>
-	</footer>
+<div class="app">
+	{@render children()}
 </div>
 
 <style>
-	:global(body) {
-		margin: 0;
-		font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-		background: #fafaf7;
-		color: #1a1a1a;
-		line-height: 1.6;
-	}
-
-	:global(.prose) {
-		max-width: 720px;
-	}
-
-	:global(.prose h1) { font-size: 1.9rem; margin-top: 1.5rem; }
-	:global(.prose h2) { font-size: 1.5rem; margin-top: 1.25rem; }
-	:global(.prose h3) { font-size: 1.2rem; margin-top: 1rem; }
-	:global(.prose code:not(pre code)) {
-		background: #f0eee8;
-		padding: 0.1em 0.35em;
-		border-radius: 4px;
-		font-size: 0.92em;
-	}
-	:global(.prose pre) {
-		background: #1e1e1e;
-		color: #f8f8f2;
-		padding: 1rem;
-		border-radius: 6px;
-		overflow-x: auto;
-	}
-	:global(.prose a.wiki) {
-		background: #eef5ff;
-		padding: 0 4px;
-		border-radius: 3px;
-		text-decoration: none;
-	}
-	:global(.prose a.wiki.broken) {
-		background: #fdecec;
-		color: #b00;
-	}
-
-	.layout {
-		min-height: 100vh;
-		display: flex;
-		flex-direction: column;
-	}
-
-	header {
-		border-bottom: 1px solid #e6e6e0;
-		background: #fff;
-	}
-	nav {
-		max-width: 900px;
-		margin: 0 auto;
-		padding: 1rem 1.25rem;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-	.brand {
-		font-weight: 700;
-		text-decoration: none;
-		color: #2d5a2d;
-		font-size: 1.15rem;
-	}
-	.links { display: flex; gap: 1.25rem; }
-	.links a { color: #444; text-decoration: none; }
-	.links a:hover { color: #2d5a2d; }
-
-	main {
-		flex: 1;
-		max-width: 900px;
-		margin: 0 auto;
-		padding: 2rem 1.25rem;
-		width: 100%;
+	:global(*) {
 		box-sizing: border-box;
 	}
 
-	footer {
-		border-top: 1px solid #e6e6e0;
-		padding: 1.5rem;
-		text-align: center;
-		color: #777;
+	:global(body) {
+		margin: 0;
+		padding: 0;
+		font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+		background: #0a0a0f;
+		color: #e4e4e7;
+		line-height: 1.6;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+
+	:global(a) {
+		color: #60a5fa;
+		text-decoration: none;
+		transition: color 0.15s ease;
+	}
+
+	:global(a:hover) {
+		color: #93c5fd;
+	}
+
+	:global(code) {
+		font-family: 'JetBrains Mono', 'Fira Code', monospace;
+		font-size: 0.9em;
+	}
+
+	:global(:not(pre) > code) {
+		background: #1a1a24;
+		color: #a78bfa;
+		padding: 0.15em 0.4em;
+		border-radius: 4px;
+		border: 1px solid #27272f;
+	}
+
+	:global(pre) {
+		background: #0f0f14;
+		border: 1px solid #1f1f28;
+		border-radius: 8px;
+		padding: 1.25rem;
+		overflow-x: auto;
+		font-size: 0.9rem;
+		line-height: 1.5;
+	}
+
+	:global(pre code) {
+		background: none;
+		padding: 0;
+		border: none;
+		color: #e4e4e7;
+	}
+
+	/* Highlight.js theme adjustments for dark mode */
+	:global(.hljs-keyword) {
+		color: #c084fc;
+	}
+	:global(.hljs-string) {
+		color: #86efac;
+	}
+	:global(.hljs-title) {
+		color: #60a5fa;
+	}
+	:global(.hljs-comment) {
+		color: #6b7280;
+	}
+	:global(.hljs-function) {
+		color: #fbbf24;
+	}
+
+	.app {
+		min-height: 100vh;
+		display: flex;
+		flex-direction: column;
 	}
 </style>
