@@ -1,60 +1,76 @@
 <!--
-  Home: search + browse with dual-pane navigation.
-  Clicking a note opens it in the right pane without navigation.
+  Home: dual-pane note navigation.
+  - Left pane: previous note (or empty)
+  - Right pane: current note being read
+  - Clicking sidebar: loads note in right pane (left becomes previous)
+  - Clicking right-pane wiki-link: shifts left→left, new note→right
 -->
 <script lang="ts">
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 
-	type ResultRow = { slug: string; title: string; excerpt: string };
+	type NoteData = {
+		slug: string;
+		title: string;
+		date: string;
+		tags: string[];
+		html: string;
+		backlinks: { slug: string; title: string }[];
+	};
 
-	let query = $state('');
-	let results = $state<ResultRow[]>([]);
-	let searching = $state(false);
-	let selectedNote = $state<any>(null);
-	let loadingNote = $state(false);
+	let leftNote = $state<NoteData | null>(null);
+	let rightNote = $state<NoteData | null>(null);
+	let loadingRight = $state(false);
+	let loadingLeft = $state(false);
+	let searchQuery = $state('');
 
-	async function runSearch(q: string) {
-		query = q;
-		if (!q.trim()) {
-			results = [];
-			return;
-		}
-		searching = true;
+	let filteredNotes = $derived(
+		searchQuery.trim()
+			? data.notes.filter((n: any) => n.slug.toLowerCase().includes(searchQuery.toLowerCase()))
+			: data.notes
+	);
+
+	async function loadNote(slug: string): Promise<NoteData | null> {
+		const res = await fetch(`/api/notes/${slug}`);
+		if (!res.ok) return null;
+		return res.json();
+	}
+
+	// Open a note from the sidebar (resets left pane)
+	async function openFromSidebar(slug: string) {
+		loadingRight = true;
+		leftNote = null;
 		try {
-			const { search } = await import('$lib/client/search');
-			const r = await search(q);
-			results = r.map((hit) => ({
-				slug: hit.item.slug,
-				title: hit.item.title,
-				excerpt: hit.item.excerpt
-			}));
+			rightNote = await loadNote(slug);
 		} finally {
-			searching = false;
+			loadingRight = false;
 		}
 	}
 
-	function onInput(e: Event) {
-		const v = (e.target as HTMLInputElement).value;
-		runSearch(v);
-	}
-
-	async function openNote(slug: string, e?: MouseEvent) {
-		if (e) e.preventDefault();
-		loadingNote = true;
+	// Open a note from within the right pane (shift panes)
+	async function openFromRightPane(slug: string) {
+		loadingLeft = true;
 		try {
-			const res = await fetch(`/api/notes/${slug}`);
-			if (res.ok) {
-				selectedNote = await res.json();
+			const next = await loadNote(slug);
+			if (next) {
+				leftNote = rightNote;
+				rightNote = next;
 			}
 		} finally {
-			loadingNote = false;
+			loadingLeft = false;
 		}
 	}
 
-	function closeNote() {
-		selectedNote = null;
+	function closeRightPane() {
+		leftNote = null;
+		rightNote = null;
+	}
+
+	function swapPanes() {
+		const tmp = leftNote;
+		leftNote = rightNote;
+		rightNote = tmp;
 	}
 </script>
 
@@ -69,131 +85,114 @@
 			<input
 				type="search"
 				placeholder="Search notes..."
-				value={query}
-				oninput={onInput}
 				autocomplete="off"
 				spellcheck="false"
+				bind:value={searchQuery}
 			/>
 		</div>
 
-		{#if query && results.length > 0}
-			<section class="section">
-				<h2>Results</h2>
-				<ul class="note-list">
-					{#each results as r (r.slug)}
-						<li>
-							<button class="note-item" onclick={(e) => openNote(r.slug, e)}>
-								<div class="note-title">{r.slug}</div>
-								{#if r.excerpt}
-									<div class="note-excerpt">{r.excerpt}</div>
-								{/if}
-							</button>
-						</li>
-					{/each}
-				</ul>
-			</section>
-		{:else if query && !searching}
-			<p class="empty">No matches.</p>
-		{/if}
+		<section class="section">
+			<h2>Notes</h2>
+			<ul class="note-list">
+				{#each filteredNotes as note (note.slug)}
+					<li>
+						<button
+							class="note-item"
+							class:active={rightNote?.slug === note.slug}
+							onclick={() => openFromSidebar(note.slug)}
+						>
+							{note.slug}
+						</button>
+					</li>
+				{/each}
+			</ul>
+		</section>
 
-		{#if !query}
-			<section class="section">
-				<h2>Recent</h2>
-				{#if data.notes.length === 0}
-					<p class="empty">No notes yet. Drop markdown files into <code>notes/</code>.</p>
-				{:else}
-					<ul class="note-list">
-						{#each data.notes as note (note.slug)}
-							<li>
-								<button class="note-item" onclick={(e) => openNote(note.slug, e)}>
-									<div class="note-title">{note.slug}</div>
-									<div class="note-meta">
-										{#if note.date}<span class="date">{note.date}</span>{/if}
-										{#if note.tags.length > 0}
-											<span class="tags">
-												{#each note.tags as t (t)}
-													<span class="tag">#{t}</span>
-												{/each}
-											</span>
-										{/if}
-									</div>
-								</button>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</section>
-
-			<section class="section">
-				<h2>Browse</h2>
-				<nav class="nav-links">
-					<a href="/tags">All Tags →</a>
-				</nav>
-			</section>
-
-			<div class="stats">
-				{data.total} note{data.total === 1 ? '' : 's'} • {data.tagCount} tag{data.tagCount === 1
-					? ''
-					: 's'}
-			</div>
-		{/if}
+		<div class="stats">
+			{data.total} notes · {data.tagCount} tags
+		</div>
 	</aside>
 
-	<main class="content">
-		{#if loadingNote}
-			<div class="loading">Loading...</div>
-		{:else if selectedNote}
-			<article class="note-view">
-				<button class="close-btn" onclick={closeNote}>✕</button>
-				<header>
-					<h1>{selectedNote.slug}</h1>
-					<div class="meta">
-						{#if selectedNote.date}
-							<span class="date">{selectedNote.date}</span>
-						{/if}
-						{#if selectedNote.tags.length > 0}
-							<div class="tags">
-								{#each selectedNote.tags as t (t)}
-									<span class="tag">#{t}</span>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</header>
-
-				<div class="prose">
-					{@html selectedNote.html}
+	<div class="panes">
+		<!-- Left pane -->
+		<div class="pane pane-left">
+			{#if leftNote}
+				<div class="pane-header">
+					<span class="pane-label">Previous</span>
+					<button class="swap-btn" onclick={swapPanes} title="Swap panes">⇄</button>
 				</div>
+				<div class="pane-content">
+					<div class="note-title-bar">{leftNote.slug}</div>
+					<div class="prose">
+						{@html leftNote.html}
+					</div>
+				</div>
+			{:else}
+				<div class="pane-empty">
+					<span>← Select a note</span>
+				</div>
+			{/if}
+		</div>
 
-				{#if selectedNote.backlinks && selectedNote.backlinks.length > 0}
-					<aside class="backlinks">
-						<h3>Linked from</h3>
-						<ul>
-							{#each selectedNote.backlinks as bl (bl)}
-								<li>
-									<button class="backlink-btn" onclick={() => openNote(bl)}>
-										{bl}
-									</button>
-								</li>
-							{/each}
-						</ul>
-					</aside>
-				{/if}
-			</article>
-		{:else}
-			<div class="empty-state">
-				<div class="icon">📖</div>
-				<h2>Select a note to begin</h2>
-				<p>Search or browse notes in the sidebar</p>
-			</div>
-		{/if}
-	</main>
+		<!-- Right pane -->
+		<div class="pane pane-right">
+			{#if loadingRight}
+				<div class="pane-loading">Loading...</div>
+			{:else if rightNote}
+				<div class="pane-header">
+					<span class="pane-label">Reading</span>
+					<button class="close-btn" onclick={closeRightPane} title="Close">✕</button>
+				</div>
+				<div class="pane-content">
+					<div class="note-title-bar">{rightNote.slug}</div>
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
+						class="prose"
+						onclick={(e) => {
+							const target = e.target as HTMLElement;
+							const a = target.closest('a');
+							if (a?.classList.contains('wiki')) {
+								e.preventDefault();
+								const href = a.getAttribute('href');
+								if (href) {
+									const slug = decodeURIComponent(href.replace('/notes/', ''));
+									openFromRightPane(slug);
+								}
+							}
+						}}
+					>
+						{@html rightNote.html}
+					</div>
+
+					{#if rightNote.backlinks && rightNote.backlinks.length > 0}
+						<aside class="backlinks">
+							<h3>Linked from</h3>
+							<ul>
+								{#each rightNote.backlinks as bl (bl.slug)}
+									<li>
+										<button class="backlink-btn" onclick={() => openFromRightPane(bl.slug)}>
+											{bl.slug}
+										</button>
+									</li>
+								{/each}
+							</ul>
+						</aside>
+					{/if}
+				</div>
+			{:else}
+				<div class="pane-empty">
+					<div class="empty-icon">📖</div>
+					<p>Select a note from the sidebar</p>
+				</div>
+			{/if}
+		</div>
+	</div>
 </div>
 
 <style>
 	.home {
 		display: grid;
-		grid-template-columns: 360px 1fr;
+		grid-template-columns: 280px 1fr;
 		height: 100vh;
 		overflow: hidden;
 	}
@@ -205,282 +204,155 @@
 		display: flex;
 		flex-direction: column;
 		overflow-y: auto;
-		padding: 2rem 1.5rem;
+		padding: 1.5rem 1rem;
 	}
 
 	.brand {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		margin-bottom: 2rem;
+		margin-bottom: 1.5rem;
 	}
 
-	.logo {
-		font-size: 2rem;
-		line-height: 1;
-	}
+	.logo { font-size: 2rem; line-height: 1; }
+	.brand h1 { font-size: 1.4rem; font-weight: 700; margin: 0; color: #f4f4f5; }
 
-	.brand h1 {
-		font-size: 1.5rem;
-		font-weight: 700;
-		margin: 0;
-		color: #f4f4f5;
-	}
-
-	.search-box {
-		margin-bottom: 2rem;
-	}
-
+	.search-box { margin-bottom: 1.5rem; }
 	.search-box input {
 		width: 100%;
-		padding: 0.75rem 1rem;
+		padding: 0.625rem 0.875rem;
 		background: #1a1a24;
 		border: 1px solid #27272f;
-		border-radius: 8px;
+		border-radius: 6px;
 		color: #e4e4e7;
-		font-size: 0.95rem;
+		font-size: 0.9rem;
 		font-family: inherit;
-		transition: all 0.15s ease;
 	}
+	.search-box input:focus { outline: none; border-color: #60a5fa; background: #0f0f14; }
+	.search-box input::placeholder { color: #52525b; }
 
-	.search-box input:focus {
-		outline: none;
-		border-color: #60a5fa;
-		background: #0f0f14;
-	}
-
-	.search-box input::placeholder {
-		color: #71717a;
-	}
-
-	.section {
-		margin-bottom: 2.5rem;
-	}
-
+	.section { flex: 1; margin-bottom: 1.5rem; }
 	.section h2 {
-		font-size: 0.75rem;
+		font-size: 0.7rem;
 		font-weight: 600;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: #71717a;
-		margin: 0 0 1rem 0;
+		letter-spacing: 0.06em;
+		color: #52525b;
+		margin: 0 0 0.5rem 0.25rem;
 	}
 
-	.note-list {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
+	.note-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 1px; }
 
 	.note-item {
 		width: 100%;
-		padding: 0.875rem;
+		padding: 0.5rem 0.625rem;
 		background: transparent;
 		border: 1px solid transparent;
-		border-radius: 6px;
+		border-radius: 5px;
 		text-align: left;
 		cursor: pointer;
-		transition: all 0.15s ease;
-		color: inherit;
-		font-family: inherit;
-	}
-
-	.note-item:hover {
-		background: #1a1a24;
-		border-color: #27272f;
-	}
-
-	.note-title {
-		font-weight: 500;
-		color: #f4f4f5;
-		margin-bottom: 0.25rem;
-	}
-
-	.note-excerpt {
+		color: #a1a1aa;
 		font-size: 0.85rem;
-		color: #a1a1aa;
-		line-height: 1.4;
-		display: -webkit-box;
-		-webkit-line-clamp: 2;
-		-webkit-box-orient: vertical;
+		font-family: 'JetBrains Mono', monospace;
+		transition: all 0.12s;
+		white-space: nowrap;
 		overflow: hidden;
+		text-overflow: ellipsis;
 	}
-
-	.note-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		font-size: 0.8rem;
-		color: #71717a;
-		margin-top: 0.5rem;
-	}
-
-	.date {
-		color: #71717a;
-	}
-
-	.tags {
-		display: flex;
-		gap: 0.4rem;
-		flex-wrap: wrap;
-	}
-
-	.tag {
-		background: #1a1a24;
-		color: #a78bfa;
-		padding: 0.15rem 0.5rem;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		font-weight: 500;
-	}
-
-	.nav-links {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
-	.nav-links a {
-		padding: 0.625rem 0.875rem;
-		color: #a1a1aa;
-		border-radius: 6px;
-		transition: all 0.15s ease;
-		font-size: 0.9rem;
-	}
-
-	.nav-links a:hover {
-		background: #1a1a24;
-		color: #e4e4e7;
-	}
+	.note-item:hover { background: #1a1a24; color: #e4e4e7; border-color: #27272f; }
+	.note-item.active { background: #1c1c28; color: #f4f4f5; border-color: #3f3f50; }
 
 	.stats {
-		margin-top: auto;
-		padding-top: 2rem;
-		font-size: 0.8rem;
-		color: #52525b;
+		padding-top: 1rem;
+		font-size: 0.75rem;
+		color: #3f3f46;
 	}
 
-	.empty {
-		color: #71717a;
-		font-size: 0.9rem;
-		padding: 1rem 0.875rem;
-	}
-
-	/* Main content */
-	.content {
-		overflow-y: auto;
+	/* Panes */
+	.panes {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		overflow: hidden;
 		background: #0a0a0f;
 	}
 
-	.empty-state {
-		height: 100%;
+	.pane {
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+		border-right: 1px solid #1a1a24;
+	}
+	.pane:last-child { border-right: none; }
+
+	.pane-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.5rem 1rem;
+		background: #0f0f14;
+		border-bottom: 1px solid #1a1a24;
+		flex-shrink: 0;
+	}
+
+	.pane-label {
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: #52525b;
+	}
+
+	.swap-btn, .close-btn {
+		background: none;
+		border: none;
+		cursor: pointer;
+		color: #52525b;
+		font-size: 0.9rem;
+		padding: 0.2rem 0.4rem;
+		border-radius: 4px;
+		transition: color 0.15s;
+	}
+	.swap-btn:hover, .close-btn:hover { color: #e4e4e7; }
+
+	.pane-content {
+		flex: 1;
+		overflow-y: auto;
+		padding: 1.5rem;
+	}
+
+	.note-title-bar {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 0.8rem;
+		color: #52525b;
+		margin-bottom: 1rem;
+		padding-bottom: 0.75rem;
+		border-bottom: 1px solid #1a1a24;
+	}
+
+	.pane-empty {
+		flex: 1;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		color: #71717a;
-		padding: 2rem;
+		color: #3f3f46;
+		gap: 0.5rem;
 	}
+	.empty-icon { font-size: 3rem; opacity: 0.4; }
+	.pane-empty p { margin: 0; font-size: 0.9rem; }
 
-	.empty-state .icon {
-		font-size: 4rem;
-		margin-bottom: 1rem;
-		opacity: 0.5;
-	}
-
-	.empty-state h2 {
-		font-size: 1.5rem;
-		font-weight: 600;
-		color: #a1a1aa;
-		margin: 0 0 0.5rem 0;
-	}
-
-	.empty-state p {
-		margin: 0;
-		font-size: 0.95rem;
-	}
-
-	.loading {
-		height: 100%;
+	.pane-loading {
+		flex: 1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		color: #71717a;
-		font-size: 1.1rem;
-	}
-
-	.note-view {
-		max-width: 800px;
-		margin: 0 auto;
-		padding: 3rem 2rem;
-		position: relative;
-	}
-
-	.close-btn {
-		position: absolute;
-		top: 2rem;
-		right: 2rem;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 6px;
-		border: 1px solid #27272f;
-		background: #1a1a24;
-		color: #71717a;
-		font-size: 1.2rem;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		transition: all 0.15s ease;
-	}
-
-	.close-btn:hover {
-		background: #0f0f14;
-		border-color: #3f3f46;
-		color: #a1a1aa;
-	}
-
-	.note-view header {
-		margin-bottom: 2.5rem;
-	}
-
-	.note-view h1 {
-		font-size: 2.5rem;
-		font-weight: 700;
-		line-height: 1.2;
-		margin: 0 0 1rem 0;
-		color: #f4f4f5;
-	}
-
-	.note-view .meta {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
+		color: #52525b;
 		font-size: 0.9rem;
 	}
 
-	.note-view .meta .date {
-		color: #71717a;
-	}
-
-	.note-view .meta .tags {
-		display: flex;
-		gap: 0.5rem;
-	}
-
-	.note-view .meta .tag {
-		background: #1a1a24;
-		color: #a78bfa;
-		padding: 0.25rem 0.625rem;
-		border-radius: 4px;
-		font-size: 0.85rem;
-	}
-
+	/* Prose styles */
 	.prose {
-		font-size: 1.05rem;
+		font-size: 1rem;
 		line-height: 1.75;
 		color: #d4d4d8;
 	}
@@ -491,103 +363,78 @@
 		color: #f4f4f5;
 		font-weight: 600;
 		line-height: 1.3;
-		margin: 2rem 0 1rem;
+		margin: 1.75rem 0 0.75rem;
 	}
+	.prose :global(h1) { font-size: 1.6rem; }
+	.prose :global(h2) { font-size: 1.25rem; border-bottom: 1px solid #1f1f28; padding-bottom: 0.3rem; }
+	.prose :global(h3) { font-size: 1.05rem; }
 
-	.prose :global(h1) {
-		font-size: 2rem;
-	}
-	.prose :global(h2) {
-		font-size: 1.5rem;
-	}
-	.prose :global(h3) {
-		font-size: 1.25rem;
-	}
-
-	.prose :global(p) {
-		margin: 1.25rem 0;
-	}
-
-	.prose :global(ul),
-	.prose :global(ol) {
-		margin: 1.25rem 0;
-		padding-left: 1.75rem;
-	}
-
-	.prose :global(li) {
-		margin: 0.5rem 0;
-	}
-
-	.prose :global(a.wiki) {
-		color: #60a5fa;
-		background: #1e3a5f;
-		padding: 0.1em 0.35em;
+	.prose :global(p) { margin: 0 0 1rem; }
+	.prose :global(a) { color: #60a5fa; }
+	.prose :global(a.wiki) { color: #a78bfa; }
+	.prose :global(a.wiki:hover) { color: #c4b5fd; text-decoration: underline; }
+	.prose :global(strong) { color: #f4f4f5; font-weight: 600; }
+	.prose :global(em) { color: #e4e4e7; }
+	.prose :global(code) { font-family: 'JetBrains Mono', monospace; font-size: 0.875em; }
+	.prose :global(:not(pre) > code) {
+		background: #1a1a24;
+		color: #a78bfa;
+		padding: 0.15em 0.4em;
 		border-radius: 4px;
-		text-decoration: none;
-		transition: all 0.15s ease;
+		border: 1px solid #27272f;
 	}
-
-	.prose :global(a.wiki:hover) {
-		background: #2d5a8f;
-		color: #93c5fd;
+	.prose :global(pre) {
+		background: #0f0f14;
+		border: 1px solid #1f1f28;
+		border-radius: 8px;
+		padding: 1rem;
+		overflow-x: auto;
+		margin: 1rem 0;
 	}
-
-	.prose :global(strong) {
-		color: #f4f4f5;
-		font-weight: 600;
+	.prose :global(pre code) { background: none; padding: 0; border: none; color: #e4e4e7; }
+	.prose :global(ul), .prose :global(ol) { margin: 0 0 1rem 1.25rem; }
+	.prose :global(li) { margin: 0.25rem 0; }
+	.prose :global(blockquote) {
+		border-left: 3px solid #3f3f50;
+		margin: 1rem 0;
+		padding: 0.5rem 1rem;
+		color: #71717a;
 	}
+	.prose :global(hr) { border: none; border-top: 1px solid #1f1f28; margin: 1.5rem 0; }
+	.prose :global(table) { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+	.prose :global(th), .prose :global(td) {
+		border: 1px solid #27272f;
+		padding: 0.5rem 0.75rem;
+		text-align: left;
+	}
+	.prose :global(th) { background: #0f0f14; color: #f4f4f5; }
 
+	/* Backlinks */
 	.backlinks {
-		margin-top: 4rem;
-		padding-top: 2rem;
-		border-top: 1px solid #27272f;
+		margin-top: 2rem;
+		padding-top: 1rem;
+		border-top: 1px solid #1f1f28;
 	}
-
 	.backlinks h3 {
-		font-size: 0.875rem;
+		font-size: 0.75rem;
 		font-weight: 600;
 		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: #71717a;
-		margin: 0 0 1rem 0;
+		letter-spacing: 0.06em;
+		color: #52525b;
+		margin: 0 0 0.5rem 0;
 	}
-
-	.backlinks ul {
-		list-style: none;
-		padding: 0;
-		margin: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-
+	.backlinks ul { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+	.backlinks li { margin: 0; }
 	.backlink-btn {
-		width: 100%;
-		padding: 0.75rem;
-		background: transparent;
-		border: 1px solid #27272f;
-		border-radius: 6px;
-		color: #a1a1aa;
-		font-family: inherit;
-		font-size: 0.95rem;
-		text-align: left;
-		cursor: pointer;
-		transition: all 0.15s ease;
-	}
-
-	.backlink-btn:hover {
 		background: #1a1a24;
-		border-color: #3f3f46;
-		color: #e4e4e7;
+		border: 1px solid #27272f;
+		color: #a78bfa;
+		padding: 0.25rem 0.625rem;
+		border-radius: 4px;
+		font-size: 0.8rem;
+		font-family: 'JetBrains Mono', monospace;
+		cursor: pointer;
+		transition: all 0.12s;
 	}
-
-	@media (max-width: 1024px) {
-		.home {
-			grid-template-columns: 1fr;
-		}
-
-		.sidebar {
-			display: none;
-		}
-	}
+	.backlink-btn:hover { border-color: #a78bfa; color: #c4b5fd; }
 </style>

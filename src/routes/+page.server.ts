@@ -26,6 +26,6 @@ export const load: PageLoad = async () => {
 		total: publicNotes.length,
 		tagCount: tagSet.size,
 		taggedTagCount: tagSet.size,
-		notes: publicNotes.slice(0, 20)
+		notes: publicNotes
 	};
 };
