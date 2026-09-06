@@ -6,6 +6,7 @@
   - Clicking right-pane wiki-link: shifts left→left, new note→right
 -->
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
@@ -37,10 +38,8 @@
 		return res.json();
 	}
 
-	// Open a note from the sidebar
 	async function openFromSidebar(slug: string) {
 		if (!rightNote) {
-			// First note — goes to left pane
 			loadingLeft = true;
 			try {
 				leftNote = await loadNote(slug);
@@ -48,7 +47,6 @@
 				loadingLeft = false;
 			}
 		} else {
-			// Left pane occupied — new note goes to right, old right→left
 			loadingRight = true;
 			try {
 				rightNote = await loadNote(slug);
@@ -58,7 +56,6 @@
 		}
 	}
 
-	// Open a note from within the right pane (shift panes)
 	async function openFromRightPane(slug: string) {
 		loadingLeft = true;
 		try {
@@ -81,6 +78,20 @@
 		leftNote = rightNote;
 		rightNote = tmp;
 	}
+
+	function handleHashNavigation() {
+		const match = window.location.hash.match(/^#\/notes\/(.+)$/);
+		if (match) {
+			const slug = decodeURIComponent(match[1]);
+			openFromRightPane(slug);
+		}
+	}
+
+	onMount(() => {
+		handleHashNavigation();
+		window.addEventListener('hashchange', handleHashNavigation);
+		return () => window.removeEventListener('hashchange', handleHashNavigation);
+	});
 </script>
 
 <div class="home">
@@ -107,7 +118,7 @@
 					<li>
 						<button
 							class="note-item"
-							class:active={rightNote?.slug === note.slug}
+							class:active={rightNote?.slug === note.slug || leftNote?.slug === note.slug}
 							onclick={() => openFromSidebar(note.slug)}
 						>
 							{note.slug}
@@ -125,7 +136,9 @@
 	<div class="panes">
 		<!-- Left pane -->
 		<div class="pane pane-left">
-			{#if leftNote}
+			{#if loadingLeft}
+				<div class="pane-loading">Loading...</div>
+			{:else if leftNote}
 				<div class="pane-header">
 					<span class="pane-label">Previous</span>
 					<button class="swap-btn" onclick={swapPanes} title="Swap panes">⇄</button>
@@ -206,7 +219,6 @@
 		overflow: hidden;
 	}
 
-	/* Sidebar */
 	.sidebar {
 		background: #0f0f14;
 		border-right: 1px solid #1f1f28;
@@ -277,7 +289,6 @@
 		color: #3f3f46;
 	}
 
-	/* Panes */
 	.panes {
 		display: grid;
 		grid-template-columns: 1fr 1fr;

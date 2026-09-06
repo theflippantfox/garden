@@ -40,10 +40,10 @@ export function extractWikiLinks(markdown: string): string[] {
  */
 function renderWikiLinks(markdown: string): string {
 	return markdown.replace(WIKI_LINK_RE, (match, target, alias) => {
-		// Use original casing for the href (case-insensitive lookup handles matching)
+		// Use hash-based URL so SvelteKit handles it as client-side navigation
 		const slug = target.trim();
 		const text = alias ? alias.trim() : target.trim();
-		return `<a href="/notes/${encodeURIComponent(slug)}" class="wiki">${text}</a>`;
+		return `<a href="/#/notes/${encodeURIComponent(slug)}" class="wiki">${text}</a>`;
 	});
 }
 

@@ -1,43 +1,9 @@
 /**
- * Server load for /notes/[slug].
- * Returns the full note (markdown + html + metadata + backlinks).
+ * /notes/[slug] — redirect to home page with note param.
  */
-
-import { error } from '@sveltejs/kit';
+import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
-import type { Note, NoteMetadata } from '$lib/types';
-import { notesCache } from '$lib/server/cache';
-import { getNotesSource } from '$lib/server/source';
 
-const CACHE_TTL_MS = 60 * 60 * 1000;
-
-export const load: PageLoad = async ({ params }) => {
-	const slug = params.slug;
-	const cacheKey = `note-${slug}`;
-
-	let note = notesCache.get<Note>(cacheKey);
-	if (!note) {
-		note = await getNotesSource().getContent(slug);
-		if (!note) throw error(404, `Note not found: ${slug}`);
-		notesCache.set(cacheKey, note, CACHE_TTL_MS);
-	}
-
-	// Compute backlinks from the cached all-notes list
-	let all = notesCache.get<NoteMetadata[]>('all-notes');
-	if (!all) {
-		all = await getNotesSource().getAllMetadata();
-		notesCache.set('all-notes', all, CACHE_TTL_MS);
-	}
-
-	const slugLower = slug.toLowerCase();
-	const backlinks = all
-		.filter(
-			(n) =>
-				n.visibility === 'public' &&
-				n.slug.toLowerCase() !== slugLower &&
-				n.links.some((l) => l.toLowerCase() === slugLower)
-		)
-		.map((n) => ({ slug: n.slug, title: n.title }));
-
-	return { note, backlinks };
+export const load: PageLoad = ({ params }) => {
+	throw redirect(307, `/?note=${encodeURIComponent(params.slug)}`);
 };
