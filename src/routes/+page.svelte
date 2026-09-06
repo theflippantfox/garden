@@ -27,9 +27,11 @@
 	let searchQuery = $state('');
 
 	let filteredNotes = $derived(
-		searchQuery.trim()
-			? data.notes.filter((n: any) => n.slug.toLowerCase().includes(searchQuery.toLowerCase()))
-			: data.notes
+		(data.notes ?? [])
+			.filter((n: any) => n?.slug)
+			.filter((n: any) =>
+				!searchQuery.trim() || n.slug.toLowerCase().includes(searchQuery.toLowerCase())
+			)
 	);
 
 	async function loadNote(slug: string): Promise<NoteData | null> {
@@ -57,6 +59,7 @@
 	}
 
 	async function openFromRightPane(slug: string) {
+		if (slug === rightNote?.slug) return; // already reading this note
 		loadingLeft = true;
 		try {
 			const next = await loadNote(slug);
@@ -114,7 +117,7 @@
 		<section class="section">
 			<h2>Notes</h2>
 			<ul class="note-list">
-				{#each filteredNotes as note (note.slug)}
+				{#each filteredNotes as note, i (note.slug ?? `note-${i}`)}
 					<li>
 						<button
 							class="note-item"
@@ -205,7 +208,7 @@
 						<aside class="backlinks">
 							<h3>Linked from</h3>
 							<ul>
-								{#each rightNote.backlinks as bl (bl.slug)}
+								{#each (rightNote.backlinks ?? []).filter(bl => bl?.slug) as bl (bl.slug)}
 									<li>
 										<button class="backlink-btn" onclick={() => openFromRightPane(bl.slug)}>
 											{bl.slug}
