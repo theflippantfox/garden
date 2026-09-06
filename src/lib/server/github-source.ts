@@ -177,6 +177,9 @@ export class GitHubNotesSource implements NotesSource {
 
 		const tree = await this.getTree();
 
+		// Try exact match first, then case-insensitive
+		const lowerSlug = slug.toLowerCase();
+
 		for (const entry of tree) {
 			let retries = 2;
 			while (retries >= 0) {
@@ -207,7 +210,7 @@ export class GitHubNotesSource implements NotesSource {
 					const content = decodeContent(blob.content);
 					const fileSlug = this.deriveSlug(entry.path, content);
 
-					if (fileSlug === slug) {
+					if (fileSlug.toLowerCase() === lowerSlug) {
 						const note = buildNote(content, slug);
 						this.contentCache.set(slug, { note, fetchedAt: now });
 						return note;

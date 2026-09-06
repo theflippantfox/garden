@@ -58,9 +58,10 @@ export interface ParsedNote {
  */
 function renderWikiLinks(markdown: string): string {
 	return markdown.replace(WIKI_LINK_RE, (match, target, alias) => {
-		const slug = slugify(target.trim());
+		// Use original casing for the href (case-insensitive lookup handles matching)
+		const slug = target.trim();
 		const text = alias ? alias.trim() : target.trim();
-		return `<a href="/notes/${slug}" class="wiki">${text}</a>`;
+		return `<a href="/notes/${encodeURIComponent(slug)}" class="wiki">${text}</a>`;
 	});
 }
 
@@ -97,7 +98,9 @@ function deriveTitleFromContent(content: string): string {
 	for (const line of lines) {
 		const stripped = line.replace(/^#+\s*/, '').trim();
 		if (!stripped) continue;
-		// Strip common inline markdown: bold, italic, links
+		// Skip Obsidian callouts like "> [!note]" and dataview templates
+		if (stripped.startsWith('>') || stripped.startsWith('<')) continue;
+		// Strip common inline markdown: bold, italic, code, links
 		const clean = stripped
 			.replace(/\*\*(.+?)\*\*/g, '$1') // **bold**
 			.replace(/\*(.+?)\*/g, '$1') // *italic*
