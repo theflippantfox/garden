@@ -145,7 +145,22 @@
 				</div>
 				<div class="pane-content">
 					<div class="note-title-bar">{leftNote.slug}</div>
-					<div class="prose">
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<div
+						class="prose"
+						onclick={(e) => {
+							const target = e.target as HTMLElement;
+							const a = target.closest('a');
+							if (a?.classList.contains('wiki')) {
+								e.preventDefault();
+								const href = a.getAttribute('href');
+								if (href) {
+									const slug = decodeURIComponent(href.replace('/notes/', ''));
+									openFromRightPane(slug);
+								}
+							}
+						}}
+					>
 						{@html leftNote.html}
 					</div>
 				</div>

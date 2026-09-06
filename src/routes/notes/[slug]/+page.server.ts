@@ -1,9 +1,9 @@
 /**
- * /notes/[slug] — redirect to home page with note param.
+ * /notes/[slug] — redirect to home page hash route.
  */
 import { redirect } from '@sveltejs/kit';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = ({ params }) => {
-	throw redirect(307, `/?note=${encodeURIComponent(params.slug)}`);
+	throw redirect(307, `/#/notes/${encodeURIComponent(params.slug)}`);
 };
