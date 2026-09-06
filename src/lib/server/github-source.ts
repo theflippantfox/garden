@@ -1,169 +1,222 @@
 /**
- * GitHub GraphQL notes source.
- * Reads notes from a GitHub repository's notes/ directory.
+ * GitHub notes source using the GitHub REST API.
+ * Fetches the entire repository tree in ONE call with all file contents.
+ * Notes can live anywhere — path determines the slug.
  */
 
-import { ApolloClient, InMemoryCache, HttpLink, gql } from '@apollo/client/core';
 import { env } from '$env/dynamic/private';
 import matter from 'gray-matter';
 import type { Note, NoteMetadata, NotesSource } from '$lib/types';
-import { buildNote, slugify } from './parser';
+import { buildNote } from './parser';
 
 const REPO_OWNER = env.GITHUB_REPO_OWNER ?? '';
 const REPO_NAME = env.GITHUB_REPO_NAME ?? '';
 const TOKEN = env.GITHUB_TOKEN ?? '';
 
-function makeClient(): ApolloClient<unknown> {
-	if (!TOKEN) {
-		throw new Error('GITHUB_TOKEN not configured');
-	}
-	return new ApolloClient({
-		link: new HttpLink({
-			uri: 'https://api.github.com/graphql',
-			headers: {
-				Authorization: `Bearer ${TOKEN}`,
-				'Content-Type': 'application/json'
-			}
-		}),
-		cache: new InMemoryCache()
-	});
-}
-
-const GET_NOTES_TREE = gql`
-	query GetNotesTree($owner: String!, $name: String!, $expression: String!) {
-		repository(owner: $owner, name: $name) {
-			object(expression: $expression) {
-				... on Tree {
-					entries {
-						name
-						type
-						oid
-						object {
-							... on Blob {
-								text
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-`;
-
 interface TreeEntry {
-	name: string;
+	path: string;
+	mode: string;
 	type: string;
-	oid: string;
-	object?: {
-		text?: string;
-	};
+	sha: string;
+	size?: number;
 }
 
-interface GraphQLResponse {
-	repository: {
-		object: {
-			entries: TreeEntry[];
-		} | null;
-	};
+interface TreeResponse {
+	sha: string;
+	url: string;
+	tree: TreeEntry[];
+	truncated: boolean;
+}
+
+/**
+ * Fetch the full recursive tree with base64-encoded content for each blob.
+ * GitHub's tree API returns content inline when we use ?recursive=1 with Accept header.
+ */
+async function fetchRepoTreeWithContent(): Promise<TreeEntry[]> {
+	const url = `/repos/${REPO_OWNER}/${REPO_NAME}/git/trees/HEAD?recursive=1`;
+	const res = await fetch(`https://api.github.com${url}`, {
+		headers: {
+			Authorization: `Bearer ${TOKEN}`,
+			Accept: 'application/vnd.github.v3+json',
+			'X-GitHub-Api-Version': '2022-11-28'
+		}
+	});
+
+	if (!res.ok) {
+		const body = await res.text();
+		throw new Error(`GitHub tree API ${res.status}: ${body}`);
+	}
+
+	const data: TreeResponse = await res.json();
+	return data.tree.filter((e) => e.type === 'blob' && e.path.endsWith('.md') && !e.path.startsWith('.'));
+}
+
+/**
+ * Decode base64 content from GitHub blob.
+ */
+function decodeContent(encoded: string): string {
+	// GitHub returns base64 with newline padding
+	return atob(encoded.replace(/\n/g, ''));
 }
 
 export class GitHubNotesSource implements NotesSource {
-	private client: ApolloClient<unknown>;
+	private cachedTree: TreeEntry[] | null = null;
+	private treeFetchedAt = 0;
+	private readonly TREE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-	constructor() {
-		this.client = makeClient();
+	private async getTree(): Promise<TreeEntry[]> {
+		const now = Date.now();
+		if (this.cachedTree && now - this.treeFetchedAt < this.TREE_CACHE_TTL_MS) {
+			return this.cachedTree;
+		}
+		this.cachedTree = await fetchRepoTreeWithContent();
+		this.treeFetchedAt = now;
+		return this.cachedTree;
 	}
 
 	/**
-	 * Recursively fetch all markdown files from notes/ directory.
-	 * GitHub GraphQL tree queries are not recursive, so we need to
-	 * query subdirectories explicitly if they exist.
+	 * Cache the full metadata so we don't re-fetch every blob on every request.
 	 */
-	private async fetchTree(path: string): Promise<Map<string, string>> {
-		const result = await this.client.query<GraphQLResponse>({
-			query: GET_NOTES_TREE,
-			variables: {
-				owner: REPO_OWNER,
-				name: REPO_NAME,
-				expression: `HEAD:${path}`
-			}
-		});
+	private metadataCache: { data: NoteMetadata[]; fetchedAt: number } | null = null;
+	private readonly METADATA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-		const entries = result.data.repository?.object?.entries ?? [];
-		const files = new Map<string, string>();
+	private deriveSlug(filePath: string, content: string): string {
+		const { data } = matter(content);
+		if (data.slug) return data.slug as string;
 
-		for (const entry of entries) {
-			if (entry.name.startsWith('_')) continue; // Skip hidden files
+		// Slug = filename without extension, preserving original casing
+		// "09-04.md" -> "09-04"
+		// "00-Digital-Garden-Project.md" -> "00-Digital-Garden-Project"
+		const basename = filePath.replace(/\.md$/, '').replace(/^.*\//, '');
+		return basename;
+	}
 
-			if (entry.type === 'blob' && entry.name.endsWith('.md')) {
-				const content = entry.object?.text ?? '';
-				const fullPath = path === 'notes' ? entry.name : `${path}/${entry.name}`;
-				files.set(fullPath, content);
-			} else if (entry.type === 'tree') {
-				// Recursively fetch subdirectories
-				const subPath = path === 'notes' ? `notes/${entry.name}` : `${path}/${entry.name}`;
-				const subFiles = await this.fetchTree(subPath);
-				for (const [subFullPath, content] of subFiles) {
-					files.set(subFullPath, content);
+	async getAllMetadata(): Promise<NoteMetadata[]> {
+		const now = Date.now();
+		if (this.metadataCache && now - this.metadataCache.fetchedAt < this.METADATA_CACHE_TTL_MS) {
+			return this.metadataCache.data;
+		}
+
+		const tree = await this.getTree();
+		const metadata: NoteMetadata[] = [];
+
+		// Fetch blobs sequentially with retry to avoid rate limiting
+		for (const entry of tree) {
+			let retries = 2;
+			while (retries >= 0) {
+				try {
+					const res = await fetch(
+						`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs/${entry.sha}`,
+						{
+							headers: {
+								Authorization: `Bearer ${TOKEN}`,
+								Accept: 'application/vnd.github.v3+json',
+								'X-GitHub-Api-Version': '2022-11-28'
+							}
+						}
+					);
+
+					if (res.status === 403 || res.status === 429) {
+						// Rate limited — wait and retry
+						const wait = res.headers.get('Retry-After') ?? '1';
+						await new Promise((r) => setTimeout(r, parseInt(wait) * 1000));
+						retries--;
+						continue;
+					}
+
+					if (!res.ok) break;
+
+					const blob: { content: string; encoding: string } = await res.json();
+					if (blob.encoding !== 'base64') break;
+
+					const content = decodeContent(blob.content);
+					const slug = this.deriveSlug(entry.path, content);
+					const note = buildNote(content, slug);
+
+					metadata.push({
+						slug: note.slug,
+						title: note.title,
+						date: note.date,
+						tags: note.tags,
+						status: note.status,
+						visibility: note.visibility,
+						excerpt: note.excerpt,
+						links: note.links
+					});
+					break; // success
+				} catch {
+					retries--;
+					if (retries < 0) break;
+					await new Promise((r) => setTimeout(r, 500));
 				}
 			}
 		}
 
-		return files;
-	}
-
-	/**
-	 * Convert file path to slug, handling frontmatter overrides.
-	 * Path: "notes/001-welcome.md" or "notes/category/002-post.md"
-	 */
-	private pathToSlug(path: string, content: string): string {
-		const { data } = matter(content);
-		if (data.slug) return data.slug as string;
-
-		// Strip "notes/" prefix, extension, and numeric prefixes
-		const basename = path
-			.replace(/^notes\//, '')
-			.replace(/\.md$/, '')
-			.replace(/^\d+-/, '');
-		return slugify(basename);
-	}
-
-	async getAllMetadata(): Promise<NoteMetadata[]> {
-		const files = await this.fetchTree('notes');
-		const metadata: NoteMetadata[] = [];
-
-		for (const [path, content] of files) {
-			const slug = this.pathToSlug(path, content);
-			const note = buildNote(content, slug);
-			metadata.push({
-				slug: note.slug,
-				title: note.title,
-				date: note.date,
-				tags: note.tags,
-				status: note.status,
-				visibility: note.visibility,
-				excerpt: note.excerpt,
-				links: note.links
-			});
-		}
-
-		// Sort by date desc
 		metadata.sort((a, b) => {
 			if (a.date && b.date) return b.date.localeCompare(a.date);
 			return a.slug.localeCompare(b.slug);
 		});
 
+		this.metadataCache = { data: metadata, fetchedAt: now };
 		return metadata;
 	}
 
+	/**
+	 * Cache individual note content to avoid re-fetching blobs for every page load.
+	 */
+	private contentCache = new Map<string, { note: Note; fetchedAt: number }>();
+	private readonly CONTENT_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
 	async getContent(slug: string): Promise<Note | null> {
-		// Fetch all files and find the one matching the slug
-		const files = await this.fetchTree('notes');
-		
-		for (const [path, content] of files) {
-			const fileSlug = this.pathToSlug(path, content);
-			if (fileSlug === slug) {
-				return buildNote(content, slug);
+		const now = Date.now();
+		const cached = this.contentCache.get(slug);
+		if (cached && now - cached.fetchedAt < this.CONTENT_CACHE_TTL_MS) {
+			return cached.note;
+		}
+
+		const tree = await this.getTree();
+
+		for (const entry of tree) {
+			let retries = 2;
+			while (retries >= 0) {
+				try {
+					const res = await fetch(
+						`https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/git/blobs/${entry.sha}`,
+						{
+							headers: {
+								Authorization: `Bearer ${TOKEN}`,
+								Accept: 'application/vnd.github.v3+json',
+								'X-GitHub-Api-Version': '2022-11-28'
+							}
+						}
+					);
+
+					if (res.status === 403 || res.status === 429) {
+						const wait = res.headers.get('Retry-After') ?? '1';
+						await new Promise((r) => setTimeout(r, parseInt(wait) * 1000));
+						retries--;
+						continue;
+					}
+
+					if (!res.ok) break;
+
+					const blob: { content: string; encoding: string } = await res.json();
+					if (blob.encoding !== 'base64') break;
+
+					const content = decodeContent(blob.content);
+					const fileSlug = this.deriveSlug(entry.path, content);
+
+					if (fileSlug === slug) {
+						const note = buildNote(content, slug);
+						this.contentCache.set(slug, { note, fetchedAt: now });
+						return note;
+					}
+					break;
+				} catch {
+					retries--;
+					if (retries < 0) break;
+					await new Promise((r) => setTimeout(r, 500));
+				}
 			}
 		}
 
