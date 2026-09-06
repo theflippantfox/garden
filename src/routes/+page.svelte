@@ -93,27 +93,13 @@
 		rightNote = tmp;
 	}
 
-	let leftPaneRef: HTMLDivElement;
-	let rightPaneRef: HTMLDivElement;
-
 	onMount(() => {
-		const handler = (e: MouseEvent) => {
-			const target = e.target as HTMLElement;
-			const a = target?.closest?.('button.wiki-link, a.wiki');
-			if (a) {
-				e.preventDefault();
-				const slug = a.getAttribute('data-slug');
-				if (slug) openFromRightPane(slug);
-			}
+		const handler = (e: Event) => {
+			const slug = (e as CustomEvent).detail.slug as string;
+			openFromRightPane(slug);
 		};
-
-		rightPaneRef?.addEventListener('click', handler);
-		leftPaneRef?.addEventListener('click', handler);
-
-		return () => {
-			rightPaneRef?.removeEventListener('click', handler);
-			leftPaneRef?.removeEventListener('click', handler);
-		};
+		document.addEventListener('wiki-navigate', handler);
+		return () => document.removeEventListener('wiki-navigate', handler);
 	});
 </script>
 
@@ -158,7 +144,7 @@
 
 	<div class="panes">
 		<!-- Left pane -->
-		<div class="pane pane-left" bind:this={leftPaneRef}>
+		<div class="pane pane-left">
 			{#if loadingLeft}
 				<div class="pane-loading">Loading...</div>
 			{:else if leftNote}
@@ -180,7 +166,7 @@
 		</div>
 
 		<!-- Right pane -->
-		<div class="pane pane-right" bind:this={rightPaneRef}>
+		<div class="pane pane-right">
 			{#if loadingRight}
 				<div class="pane-loading">Loading...</div>
 			{:else if rightNote}

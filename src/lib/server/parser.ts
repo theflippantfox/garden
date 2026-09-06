@@ -42,7 +42,7 @@ function renderWikiLinks(markdown: string): string {
 	return markdown.replace(WIKI_LINK_RE, (match, target, alias) => {
 		const slug = target.trim();
 		const text = alias ? alias.trim() : target.trim();
-		return `<button class="wiki-link" data-slug="${slug}">${text}</button>`;
+		return `<a href="#wiki-${slug}" class="wiki">${text}</a>`;
 	});
 }
 

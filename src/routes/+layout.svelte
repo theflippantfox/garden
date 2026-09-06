@@ -1,7 +1,17 @@
 <script lang="ts">
 	import favicon from '$lib/assets/favicon.svg';
+	import { beforeNavigate } from '$app/navigation';
 
 	let { children } = $props();
+
+	// Intercept wiki-link clicks before SvelteKit's router processes them
+	beforeNavigate(({ cancel, to }) => {
+		if (to?.url.hash.startsWith('#wiki-')) {
+			cancel();
+			// Dispatch custom event for the page to handle
+			document.dispatchEvent(new CustomEvent('wiki-navigate', { detail: { slug: to.url.hash.slice(1) } }));
+		}
+	});
 </script>
 
 <svelte:head>
