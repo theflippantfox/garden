@@ -73,7 +73,7 @@ export class MockNotesSource implements NotesSource {
 		for (const f of files) {
 			const raw = await readFile(f, 'utf-8');
 			const { data } = matter(raw);
-			const slug = data.slug ?? filenameSlug(f, this.root);
+			const slug = filenameSlug(f, this.root); // Always use filename, never frontmatter
 			map.set(slug, f);
 		}
 		this.fileBySlug = map;

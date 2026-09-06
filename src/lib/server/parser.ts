@@ -28,28 +28,10 @@ const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
 
 export function extractWikiLinks(markdown: string): string[] {
 	const slugs = new Set<string>();
-	let match: RegExpExecArray | null;
-	while ((match = WIKI_LINK_RE.exec(markdown)) !== null) {
-		// Capture group 1 is the target; group 2 is the optional alias.
-		slugs.add(slugify(match[1].trim()));
+	for (const match of markdown.matchAll(WIKI_LINK_RE)) {
+		slugs.add(match[1].trim());
 	}
-	return Array.from(slugs);
-}
-
-export function slugify(input: string): string {
-	return input
-		.toLowerCase()
-		.replace(/[^a-z0-9\s-]/g, '')
-		.trim()
-		.replace(/\s+/g, '-');
-}
-
-export interface ParsedNote {
-	frontmatter: NoteFrontmatter;
-	content: string; // markdown body (frontmatter stripped)
-	html: string;
-	links: string[];
-	derivedTitle: string; // first heading from content (for display when no frontmatter title)
+	return [...slugs];
 }
 
 /**
@@ -65,14 +47,13 @@ function renderWikiLinks(markdown: string): string {
 	});
 }
 
-export function parseMarkdown(raw: string, fallbackSlug?: string): ParsedNote {
+export function parseMarkdown(raw: string): ParsedNote {
 	const { data, content } = matter(raw);
 	const fm = data as Partial<NoteFrontmatter>;
-
-	const slug = fm.slug ?? slugify(fallbackSlug ?? fm.title ?? 'untitled');
 	const frontmatter: NoteFrontmatter = {
 		title: fm.title ?? 'Untitled',
-		slug,
+		// slug is set by the caller (source) from the filename — NOT from frontmatter
+		slug: '',
 		// gray-matter auto-parses YAML dates into JS Date objects; normalize to ISO string.
 		date: fm.date instanceof Date ? fm.date.toISOString().slice(0, 10) : fm.date,
 		tags: Array.isArray(fm.tags) ? fm.tags : [],
@@ -113,12 +94,12 @@ function deriveTitleFromContent(content: string): string {
 
 /** Build a Note record from raw markdown + slug. */
 export function buildNote(raw: string, slug: string, backlinks?: string[]): Note {
-	const parsed = parseMarkdown(raw, slug);
+	const parsed = parseMarkdown(raw);
 	const fm = parsed.frontmatter;
 	// Use derived title (from content) when frontmatter didn't specify one
 	const title = fm.title === 'Untitled' && parsed.derivedTitle ? parsed.derivedTitle : fm.title;
 	return {
-		slug: fm.slug ?? slug,
+		slug, // Always use filename-derived slug passed from source
 		title,
 		date: fm.date ?? '',
 		tags: fm.tags ?? [],
@@ -130,4 +111,24 @@ export function buildNote(raw: string, slug: string, backlinks?: string[]): Note
 		html: parsed.html,
 		backlinks
 	};
+}
+
+export interface ParsedNote {
+	frontmatter: NoteFrontmatter;
+	content: string; // markdown body (frontmatter stripped)
+	html: string;
+	links: string[];
+	derivedTitle: string; // first heading from content (for display when no frontmatter title)
+}
+
+/**
+ * Slugify a string for URL-safe identifiers.
+ * NOTE: Use filename-derived slugs from the source — this is only for search/links.
+ */
+export function slugify(input: string): string {
+	return input
+		.toLowerCase()
+		.replace(/[^a-z0-9\s-]/g, '')
+		.trim()
+		.replace(/\s+/g, '-');
 }
