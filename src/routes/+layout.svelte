@@ -15,7 +15,8 @@
 	/>
 </svelte:head>
 
-<div class="app">
+<!-- svelte-ignore a11y_autofocus -->
+<div class="app" data-sveltekit-preload-data="off">
 	{@render children()}
 </div>
 

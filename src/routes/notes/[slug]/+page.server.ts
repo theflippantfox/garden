@@ -28,8 +28,15 @@ export const load: PageLoad = async ({ params }) => {
 		all = await getNotesSource().getAllMetadata();
 		notesCache.set('all-notes', all, CACHE_TTL_MS);
 	}
+
+	const slugLower = slug.toLowerCase();
 	const backlinks = all
-		.filter((n) => n.visibility === 'public' && n.links.includes(slug))
+		.filter(
+			(n) =>
+				n.visibility === 'public' &&
+				n.slug.toLowerCase() !== slugLower &&
+				n.links.some((l) => l.toLowerCase() === slugLower)
+		)
 		.map((n) => ({ slug: n.slug, title: n.title }));
 
 	return { note, backlinks };
