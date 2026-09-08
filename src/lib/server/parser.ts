@@ -8,20 +8,20 @@
  * Pure functions — no I/O, easy to test.
  */
 
-import matter from 'gray-matter';
-import { Marked } from 'marked';
-import { markedHighlight } from 'marked-highlight';
-import hljs from 'highlight.js';
-import type { Note, NoteFrontmatter } from '$lib/types';
+import matter from "gray-matter";
+import { Marked } from "marked";
+import { markedHighlight } from "marked-highlight";
+import hljs from "highlight.js";
+import type { Note, NoteFrontmatter } from "$lib/types";
 
 const marked = new Marked(
 	markedHighlight({
-		langPrefix: 'hljs language-',
+		langPrefix: "hljs language-",
 		highlight(code: string, lang: string) {
-			const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
+			const language = lang && hljs.getLanguage(lang) ? lang : "plaintext";
 			return hljs.highlight(code, { language }).value;
-		}
-	})
+		},
+	}),
 );
 
 const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
@@ -39,7 +39,7 @@ export function extractWikiLinks(markdown: string): string[] {
  * Syntax: [[target]] or [[target|display text]]
  */
 function renderWikiLinks(markdown: string): string {
-	return markdown.replace(WIKI_LINK_RE, (match, target, alias) => {
+	return markdown.replace(WIKI_LINK_RE, (_match, target, alias) => {
 		const slug = target.trim();
 		const text = alias ? alias.trim() : target.trim();
 		return `<a href="#wiki-${slug}" class="wiki">${text}</a>`;
@@ -49,16 +49,30 @@ function renderWikiLinks(markdown: string): string {
 export function parseMarkdown(raw: string): ParsedNote {
 	const { data, content } = matter(raw);
 	const fm = data as Partial<NoteFrontmatter>;
+	// SAFETY: gray-matter returns the raw YAML value here — at runtime this is
+	// string | Date | undefined even though NoteFrontmatter types it as string.
+	const rawDate: unknown = fm.date;
+	// SAFETY: YAML lists can contain null entries (e.g. "tags: [null]" or
+	// "- " with nothing after it); filter them so downstream code never
+	// receives null tag names.
+	const rawTags: unknown = fm.tags;
 	const frontmatter: NoteFrontmatter = {
-		title: fm.title ?? 'Untitled',
+		title: fm.title ?? "Untitled",
 		// slug is set by the caller (source) from the filename — NOT from frontmatter
-		slug: '',
+		slug: "",
 		// gray-matter auto-parses YAML dates into JS Date objects; normalize to ISO string.
-		date: fm.date instanceof Date ? fm.date.toISOString().slice(0, 10) : fm.date,
-		tags: Array.isArray(fm.tags) ? fm.tags : [],
+		date:
+			rawDate instanceof Date
+				? rawDate.toISOString().slice(0, 10)
+				: (rawDate as string | undefined),
+		tags: Array.isArray(rawTags)
+			? (rawTags as unknown[]).filter(
+					(t): t is string => typeof t === "string" && t.trim().length > 0,
+				)
+			: [],
 		status: fm.status,
 		visibility: fm.visibility,
-		excerpt: fm.excerpt
+		excerpt: fm.excerpt,
 	};
 
 	const links = extractWikiLinks(content);
@@ -74,41 +88,48 @@ export function parseMarkdown(raw: string): ParsedNote {
 
 function deriveTitleFromContent(content: string): string {
 	// Strip markdown heading markers from first non-empty line
-	const lines = content.split('\n');
+	const lines = content.split("\n");
 	for (const line of lines) {
-		const stripped = line.replace(/^#+\s*/, '').trim();
+		const stripped = line.replace(/^#+\s*/, "").trim();
 		if (!stripped) continue;
 		// Skip Obsidian callouts like "> [!note]" and dataview templates
-		if (stripped.startsWith('>') || stripped.startsWith('<')) continue;
+		if (stripped.startsWith(">") || stripped.startsWith("<")) continue;
 		// Strip common inline markdown: bold, italic, code, links
 		const clean = stripped
-			.replace(/\*\*(.+?)\*\*/g, '$1') // **bold**
-			.replace(/\*(.+?)\*/g, '$1') // *italic*
-			.replace(/`(.+?)`/g, '$1') // `code`
-			.replace(/\[(.+?)\]\(.+?\)/g, '$1'); // [text](url)
+			.replace(/\*\*(.+?)\*\*/g, "$1") // **bold**
+			.replace(/\*(.+?)\*/g, "$1") // *italic*
+			.replace(/`(.+?)`/g, "$1") // `code`
+			.replace(/\[(.+?)\]\(.+?\)/g, "$1"); // [text](url)
 		if (clean) return clean;
 	}
-	return 'Untitled';
+	return "Untitled";
 }
 
 /** Build a Note record from raw markdown + slug. */
-export function buildNote(raw: string, slug: string, backlinks?: string[]): Note {
+export function buildNote(
+	raw: string,
+	slug: string,
+	backlinks?: string[],
+): Note {
 	const parsed = parseMarkdown(raw);
 	const fm = parsed.frontmatter;
 	// Use derived title (from content) when frontmatter didn't specify one
-	const title = fm.title === 'Untitled' && parsed.derivedTitle ? parsed.derivedTitle : fm.title;
+	const title =
+		fm.title === "Untitled" && parsed.derivedTitle
+			? parsed.derivedTitle
+			: fm.title;
 	return {
 		slug, // Always use filename-derived slug passed from source
 		title,
-		date: fm.date ?? '',
+		date: fm.date ?? "",
 		tags: fm.tags ?? [],
-		status: fm.status ?? 'active',
-		visibility: fm.visibility ?? 'public',
-		excerpt: fm.excerpt ?? '',
+		status: fm.status ?? "active",
+		visibility: fm.visibility ?? "public",
+		excerpt: fm.excerpt ?? "",
 		links: parsed.links,
 		content: parsed.content,
 		html: parsed.html,
-		backlinks
+		backlinks,
 	};
 }
 
@@ -127,7 +148,7 @@ export interface ParsedNote {
 export function slugify(input: string): string {
 	return input
 		.toLowerCase()
-		.replace(/[^a-z0-9\s-]/g, '')
+		.replace(/[^a-z0-9\s-]/g, "")
 		.trim()
-		.replace(/\s+/g, '-');
+		.replace(/\s+/g, "-");
 }

@@ -19,6 +19,29 @@
 	let loadingPrimary = $state(false);
 	let loadingSecondary = $state(false);
 	let searchQuery = $state('');
+	let sidebarOpen = $state(false);
+
+	// Lock page scroll when the mobile sidebar drawer is open.
+	$effect(() => {
+		if (sidebarOpen) {
+			document.body.style.overflow = 'hidden';
+		} else {
+			document.body.style.overflow = '';
+		}
+		return () => {
+			document.body.style.overflow = '';
+		};
+	});
+
+	// Close the mobile drawer when an escape key is pressed.
+	$effect(() => {
+		if (!sidebarOpen) return;
+		function onKey(e: KeyboardEvent) {
+			if (e.key === 'Escape') sidebarOpen = false;
+		}
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
 
 	let filteredNotes = $derived(
 		(data.notes ?? [])
@@ -40,6 +63,7 @@
 		loadingPrimary = true;
 		secondaryNote = null;
 		mode = 'single';
+		sidebarOpen = false; // close mobile drawer after picking a note
 		try {
 			primaryNote = await loadNote(slug);
 		} finally {
@@ -62,11 +86,13 @@
 		}
 	}
 
+	// pi-lens-ignore: lint/correctness/noUnusedVariables
 	function closeSecondary() {
 		secondaryNote = null;
 		mode = 'single';
 	}
 
+	// pi-lens-ignore: lint/correctness/noUnusedVariables
 	function swapNotes() {
 		const tmp = primaryNote;
 		primaryNote = secondaryNote;
@@ -84,7 +110,30 @@
 </script>
 
 <div class="home">
-	<aside class="sidebar">
+	<!-- Mobile header with menu toggle -->
+	<header class="mobile-header">
+		<button
+			class="menu-btn"
+			class:open={sidebarOpen}
+			aria-label={sidebarOpen ? 'Close notes list' : 'Open notes list'}
+			aria-expanded={sidebarOpen}
+			onclick={() => (sidebarOpen = !sidebarOpen)}
+		>
+			<span class="menu-icon" aria-hidden="true"></span>
+		</button>
+		<span class="mobile-title">🌱 Garden</span>
+	</header>
+
+	<!-- Backdrop for mobile drawer -->
+	{#if sidebarOpen}
+		<button
+			class="backdrop"
+			aria-label="Close notes list"
+			onclick={() => (sidebarOpen = false)}
+		></button>
+	{/if}
+
+	<aside class="sidebar" class:open={sidebarOpen}>
 		<div class="brand">
 			<div class="logo">🌱</div>
 			<h1>Garden</h1>
@@ -449,4 +498,141 @@
 		transition: all 0.12s;
 	}
 	.backlink-btn:hover { border-color: #a78bfa; color: #c4b5fd; }
+
+	/* Mobile header + drawer (hidden on desktop) */
+	.mobile-header {
+		display: none;
+	}
+	.backdrop {
+		display: none;
+	}
+
+	/* Responsive: tablet & below */
+	@media (max-width: 900px) {
+		.home {
+			display: flex;
+			flex-direction: column;
+			height: 100dvh;
+			grid-template-columns: unset;
+			overflow: hidden;
+		}
+
+		.main {
+			flex: 1;
+			min-height: 0;
+			grid-template-columns: 1fr;
+		}
+
+		.mobile-header {
+			display: flex;
+			align-items: center;
+			gap: 0.75rem;
+			padding: 0.625rem 1rem;
+			padding-top: calc(0.625rem + env(safe-area-inset-top));
+			background: #0f0f14;
+			border-bottom: 1px solid #1f1f28;
+			flex-shrink: 0;
+			z-index: 30;
+		}
+
+		.menu-btn {
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 5px;
+			width: 2.5rem;
+			height: 2.5rem;
+			padding: 0;
+			background: none;
+			border: 1px solid #27272f;
+			border-radius: 6px;
+			cursor: pointer;
+			flex-shrink: 0;
+			-webkit-tap-highlight-color: transparent;
+		}
+		.menu-btn .menu-icon {
+			position: relative;
+			width: 1.125rem;
+			height: 2px;
+			background: #e4e4e7;
+			border-radius: 2px;
+			transition: background 0.2s;
+		}
+		.menu-btn .menu-icon::before,
+		.menu-btn .menu-icon::after {
+			content: '';
+			position: absolute;
+			left: 0;
+			width: 1.125rem;
+			height: 2px;
+			background: #e4e4e7;
+			border-radius: 2px;
+			transition: transform 0.2s ease;
+		}
+		.menu-btn .menu-icon::before { top: -6px; }
+		.menu-btn .menu-icon::after { top: 6px; }
+		/* Animate to an X when open */
+		.menu-btn.open .menu-icon { background: transparent; }
+		.menu-btn.open .menu-icon::before { transform: translateY(6px) rotate(45deg); }
+		.menu-btn.open .menu-icon::after { transform: translateY(-6px) rotate(-45deg); }
+
+		.mobile-title {
+			font-weight: 600;
+			font-size: 1.05rem;
+			color: #f4f4f5;
+		}
+
+		/* Sidebar becomes a slide-in drawer */
+		.sidebar {
+			position: fixed;
+			top: 0;
+			left: 0;
+			bottom: 0;
+			width: min(300px, 85vw);
+			z-index: 40;
+			padding: 1rem;
+			padding-top: calc(1rem + env(safe-area-inset-top));
+			padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+			transform: translateX(-105%);
+			transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+			box-shadow: 0 0 24px rgba(0, 0, 0, 0.5);
+			border-right: 1px solid #1f1f28;
+		}
+		.sidebar.open {
+			transform: translateX(0);
+		}
+
+		.backdrop {
+			display: block;
+			position: fixed;
+			inset: 0;
+			background: rgba(0, 0, 0, 0.55);
+			z-index: 35;
+			border: none;
+			padding: 0;
+			cursor: pointer;
+		}
+
+		/* Stack panes vertically in split mode */
+		.main.split {
+			grid-template-columns: 1fr;
+			grid-template-rows: 1fr 1fr;
+			overflow: hidden;
+		}
+		.main.split .pane-secondary {
+			border-left: none;
+			border-top: 1px solid #1a1a24;
+		}
+
+		/* Reduce pane padding on small screens */
+		.pane-content {
+			padding: 1rem 1rem 1.5rem;
+		}
+
+		.note-item {
+			font-size: 0.9rem;
+			padding: 0.625rem 0.625rem;
+		}
+	}
 </style>

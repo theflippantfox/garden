@@ -13,6 +13,7 @@
 	});
 
 	// Svelte action: intercept wiki-link clicks in capture phase (before any other handlers)
+	// pi-lens-ignore: lint/correctness/noUnusedVariables
 	function wikiNav(node: HTMLElement) {
 		function handler(e: Event) {
 			const target = e.target as Element;
@@ -34,6 +35,7 @@
 </script>
 
 <svelte:head>
+	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<link rel="icon" href={favicon} />
 	<title>Digital Garden</title>
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
