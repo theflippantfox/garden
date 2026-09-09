@@ -179,6 +179,7 @@ export function parseMarkdown(raw: string): ParsedNote {
 			: [],
 		status: fm.status,
 		visibility: fm.visibility,
+		private: fm.private === true,
 		excerpt: fm.excerpt,
 	};
 
@@ -232,6 +233,7 @@ export function buildNote(
 		tags: fm.tags ?? [],
 		status: fm.status ?? "active",
 		visibility: fm.visibility ?? "public",
+		private: fm.private === true,
 		excerpt: fm.excerpt ?? "",
 		links: parsed.links,
 		content: parsed.content,

@@ -5,8 +5,8 @@
 
 // --- Frontmatter & Note ---
 
-export type Visibility = 'public' | 'private';
-export type Status = 'active' | 'draft' | 'archived';
+export type Visibility = "public" | "private";
+export type Status = "active" | "draft" | "archived";
 
 export interface NoteFrontmatter {
 	title: string;
@@ -15,6 +15,7 @@ export interface NoteFrontmatter {
 	tags?: string[];
 	status?: Status;
 	visibility?: Visibility;
+	private?: boolean; // if true, note is hidden from listings
 	excerpt?: string;
 }
 
@@ -25,6 +26,7 @@ export interface NoteMetadata {
 	tags: string[];
 	status: Status;
 	visibility: Visibility;
+	private: boolean;
 	excerpt: string;
 	// computed/derived at fetch time
 	links: string[]; // outgoing [[wiki-link]] slugs

@@ -18,7 +18,7 @@ export const load: PageServerLoad = async () => {
 		notesCache.set(CACHE_KEY, all, CACHE_TTL_MS);
 	}
 
-	const publicNotes = all.filter((n) => n.visibility === "public");
+	const publicNotes = all.filter((n) => n.visibility === "public" && !n.private);
 	const tagSet = new Set<string>();
 	for (const n of publicNotes) for (const t of n.tags) tagSet.add(t);
 

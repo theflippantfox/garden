@@ -13,14 +13,14 @@
  * Files starting with `_` are ignored.
  */
 
-import { readdir, readFile } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
-import matter from 'gray-matter';
-import { env } from '$env/dynamic/private';
-import type { Note, NoteMetadata, NotesSource } from '$lib/types';
-import { buildNote, slugify } from './parser';
+import { readdir, readFile } from "node:fs/promises";
+import { join, relative, sep } from "node:path";
+import matter from "gray-matter";
+import { env } from "$env/dynamic/private";
+import type { Note, NoteMetadata, NotesSource } from "$lib/types";
+import { buildNote, slugify } from "./parser";
 
-const DEFAULT_NOTES_DIR = 'notes';
+const DEFAULT_NOTES_DIR = "notes";
 
 function getNotesDir(): string {
 	// env override; falls back to ./notes in project root
@@ -36,11 +36,11 @@ async function walkMarkdown(dir: string): Promise<string[]> {
 		return out;
 	}
 	for (const entry of entries) {
-		if (entry.name.startsWith('_')) continue;
+		if (entry.name.startsWith("_")) continue;
 		const full = join(dir, entry.name);
 		if (entry.isDirectory()) {
 			out.push(...(await walkMarkdown(full)));
-		} else if (entry.isFile() && entry.name.endsWith('.md')) {
+		} else if (entry.isFile() && entry.name.endsWith(".md")) {
 			out.push(full);
 		}
 	}
@@ -48,10 +48,10 @@ async function walkMarkdown(dir: string): Promise<string[]> {
 }
 
 function filenameSlug(absPath: string, root: string): string {
-	const rel = relative(root, absPath).split(sep).join('/');
+	const rel = relative(root, absPath).split(sep).join("/");
 	// strip extension, drop numeric prefixes like "001-" so the URL stays clean
-	const noExt = rel.replace(/\.md$/, '');
-	const noPrefix = noExt.replace(/^\d+-/, '');
+	const noExt = rel.replace(/\.md$/, "");
+	const noPrefix = noExt.replace(/^\d+-/, "");
 	return slugify(noPrefix);
 }
 
@@ -71,7 +71,7 @@ export class MockNotesSource implements NotesSource {
 		const files = await walkMarkdown(this.root);
 		const map = new Map<string, string>();
 		for (const f of files) {
-			const raw = await readFile(f, 'utf-8');
+			const raw = await readFile(f, "utf-8");
 			const { data } = matter(raw);
 			const slug = filenameSlug(f, this.root); // Always use filename, never frontmatter
 			map.set(slug, f);
@@ -83,10 +83,10 @@ export class MockNotesSource implements NotesSource {
 		await this.indexFiles();
 		const out: NoteMetadata[] = [];
 		for (const [slug, file] of this.fileBySlug) {
-			const raw = await readFile(file, 'utf-8');
+			const raw = await readFile(file, "utf-8");
 			const note = buildNote(raw, slug);
 			// Skip private notes
-			if (note.visibility === 'private') continue;
+			if (note.visibility === "private" || note.private) continue;
 			out.push({
 				slug: note.slug,
 				title: note.title,
@@ -94,8 +94,9 @@ export class MockNotesSource implements NotesSource {
 				tags: note.tags,
 				status: note.status,
 				visibility: note.visibility,
+				private: note.private,
 				excerpt: note.excerpt,
-				links: note.links
+				links: note.links,
 			});
 		}
 		// Sort by date desc, falling back to slug
@@ -110,7 +111,7 @@ export class MockNotesSource implements NotesSource {
 		await this.indexFiles();
 		const file = this.fileBySlug.get(slug);
 		if (!file) return null;
-		const raw = await readFile(file, 'utf-8');
+		const raw = await readFile(file, "utf-8");
 		return buildNote(raw, slug);
 	}
 }

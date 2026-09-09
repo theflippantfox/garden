@@ -19,7 +19,9 @@ export const load: PageServerLoad = async ({ params }) => {
 	}
 
 	const notes = all
-		.filter((n) => n.visibility === "public" && n.tags.includes(tag))
+		.filter(
+			(n) => n.visibility === "public" && !n.private && n.tags.includes(tag),
+		)
 		.sort((a, b) =>
 			a.date && b.date
 				? b.date.localeCompare(a.date)

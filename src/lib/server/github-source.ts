@@ -4,13 +4,13 @@
  * Notes can live anywhere — path determines the slug.
  */
 
-import { env } from '$env/dynamic/private';
-import type { Note, NoteMetadata, NotesSource } from '$lib/types';
-import { buildNote } from './parser';
+import { env } from "$env/dynamic/private";
+import type { Note, NoteMetadata, NotesSource } from "$lib/types";
+import { buildNote } from "./parser";
 
-const REPO_OWNER = env.GITHUB_REPO_OWNER ?? '';
-const REPO_NAME = env.GITHUB_REPO_NAME ?? '';
-const TOKEN = env.GITHUB_TOKEN ?? '';
+const REPO_OWNER = env.GITHUB_REPO_OWNER ?? "";
+const REPO_NAME = env.GITHUB_REPO_NAME ?? "";
+const TOKEN = env.GITHUB_TOKEN ?? "";
 
 interface TreeEntry {
 	path: string;
@@ -35,9 +35,9 @@ async function fetchRepoTree(): Promise<TreeEntry[]> {
 	const res = await fetch(`https://api.github.com${url}`, {
 		headers: {
 			Authorization: `Bearer ${TOKEN}`,
-			Accept: 'application/vnd.github.v3+json',
-			'X-GitHub-Api-Version': '2022-11-28'
-		}
+			Accept: "application/vnd.github.v3+json",
+			"X-GitHub-Api-Version": "2022-11-28",
+		},
 	});
 
 	if (!res.ok) {
@@ -49,10 +49,10 @@ async function fetchRepoTree(): Promise<TreeEntry[]> {
 	// Only markdown files, skip hidden/.trash dirs
 	return data.tree.filter(
 		(e) =>
-			e.type === 'blob' &&
-			e.path.endsWith('.md') &&
-			!e.path.startsWith('.') &&
-			!e.path.includes('/.trash/')
+			e.type === "blob" &&
+			e.path.endsWith(".md") &&
+			!e.path.startsWith(".") &&
+			!e.path.includes("/.trash/"),
 	);
 }
 
@@ -62,7 +62,7 @@ async function fetchRepoTree(): Promise<TreeEntry[]> {
 function decodeContent(encoded: string): string {
 	// Node atob() decodes base64 to a Latin-1 string (each byte = one character).
 	// We need UTF-8, so we convert through Buffer.
-	return Buffer.from(encoded.replace(/\n/g, ''), 'base64').toString('utf8');
+	return Buffer.from(encoded.replace(/\n/g, ""), "base64").toString("utf8");
 }
 
 export class GitHubNotesSource implements NotesSource {
@@ -88,7 +88,8 @@ export class GitHubNotesSource implements NotesSource {
 	private readonly SLUG_INDEX_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 	// ── Metadata cache ─────────────────────────────────────────────────────────
-	private metadataCache: { data: NoteMetadata[]; fetchedAt: number } | null = null;
+	private metadataCache: { data: NoteMetadata[]; fetchedAt: number } | null =
+		null;
 	private readonly METADATA_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
 	private deriveSlug(filePath: string): string {
@@ -96,7 +97,7 @@ export class GitHubNotesSource implements NotesSource {
 		// "09-04.md" → "09-04"
 		// "00-Digital-Garden-Project.md" → "00-Digital-Garden-Project"
 		// "00-shëlf-index.md" → "00-shëlf-index"
-		return filePath.replace(/\.md$/, '').replace(/^.*\//, '');
+		return filePath.replace(/\.md$/, "").replace(/^.*\//, "");
 	}
 
 	/**
@@ -105,7 +106,10 @@ export class GitHubNotesSource implements NotesSource {
 	 */
 	private async buildSlugIndex(): Promise<Map<string, TreeEntry>> {
 		const now = Date.now();
-		if (this.slugIndex.size > 0 && now - this.slugIndexFetchedAt < this.SLUG_INDEX_TTL_MS) {
+		if (
+			this.slugIndex.size > 0 &&
+			now - this.slugIndexFetchedAt < this.SLUG_INDEX_TTL_MS
+		) {
 			return this.slugIndex;
 		}
 
@@ -114,7 +118,7 @@ export class GitHubNotesSource implements NotesSource {
 
 		for (const entry of tree) {
 			// Derive slug from filename only (no blob fetch needed for tree-level index)
-			const basename = entry.path.replace(/\.md$/, '').replace(/^.*\//, '');
+			const basename = entry.path.replace(/\.md$/, "").replace(/^.*\//, "");
 			const slug = basename;
 			this.slugIndex.set(slug.toLowerCase(), entry);
 		}
@@ -135,14 +139,14 @@ export class GitHubNotesSource implements NotesSource {
 					{
 						headers: {
 							Authorization: `Bearer ${TOKEN}`,
-							Accept: 'application/vnd.github.v3+json',
-							'X-GitHub-Api-Version': '2022-11-28'
-						}
-					}
+							Accept: "application/vnd.github.v3+json",
+							"X-GitHub-Api-Version": "2022-11-28",
+						},
+					},
 				);
 
 				if (res.status === 403 || res.status === 429) {
-					const wait = res.headers.get('Retry-After') ?? '1';
+					const wait = res.headers.get("Retry-After") ?? "1";
 					await new Promise((r) => setTimeout(r, parseInt(wait) * 1000));
 					retries--;
 					continue;
@@ -151,7 +155,7 @@ export class GitHubNotesSource implements NotesSource {
 				if (!res.ok) throw new Error(`Blob API ${res.status}`);
 
 				const blob: { content: string; encoding: string } = await res.json();
-				if (blob.encoding !== 'base64') throw new Error('Unexpected encoding');
+				if (blob.encoding !== "base64") throw new Error("Unexpected encoding");
 				return decodeContent(blob.content);
 			} catch {
 				retries--;
@@ -164,7 +168,10 @@ export class GitHubNotesSource implements NotesSource {
 
 	async getAllMetadata(): Promise<NoteMetadata[]> {
 		const now = Date.now();
-		if (this.metadataCache && now - this.metadataCache.fetchedAt < this.METADATA_CACHE_TTL_MS) {
+		if (
+			this.metadataCache &&
+			now - this.metadataCache.fetchedAt < this.METADATA_CACHE_TTL_MS
+		) {
 			return this.metadataCache.data;
 		}
 
@@ -180,7 +187,7 @@ export class GitHubNotesSource implements NotesSource {
 			const note = buildNote(content, slug);
 
 			// Skip private notes — they don't appear in the index
-			if (note.visibility === 'private') continue;
+			if (note.visibility === "private" || note.private) continue;
 
 			// Index by filename-derived slug for O(1) lookup
 			const indexSlug = slug.toLowerCase();
@@ -199,8 +206,9 @@ export class GitHubNotesSource implements NotesSource {
 				tags: note.tags,
 				status: note.status,
 				visibility: note.visibility,
+				private: note.private,
 				excerpt: note.excerpt,
-				links: note.links
+				links: note.links,
 			});
 		}
 

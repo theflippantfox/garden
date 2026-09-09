@@ -18,7 +18,7 @@ export const load: PageServerLoad = async () => {
 
 	const counts = new Map<string, number>();
 	for (const n of all) {
-		if (n.visibility !== "public") continue;
+		if (n.visibility !== "public" || n.private) continue;
 		for (const t of n.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
 	}
 
