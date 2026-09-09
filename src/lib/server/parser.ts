@@ -13,6 +13,113 @@ import { Marked } from "marked";
 import { markedHighlight } from "marked-highlight";
 import hljs from "highlight.js";
 import type { Note, NoteFrontmatter } from "$lib/types";
+import type { TokenizerAndRendererExtension } from "marked";
+
+const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+
+/**
+ * Obsidian-style callout extension for marked.
+ *
+ * Converts blockquotes whose first line is `> [!type]` (optionally with a
+ * custom title: `> [!warning] My Title`) into a callout block:
+ *
+ *   > [!note]
+ *   > This is a callout with **bold** text.
+ *
+ * Emits `<aside class="callout" data-callout="type">` so the UI can style
+ * each type (note, tip, warning, danger, quote, ...) independently.
+ * Plain blockquotes (no `[!type]` header) are left untouched.
+ */
+function calloutExtension(): TokenizerAndRendererExtension {
+	return {
+		name: "callout",
+		level: "block",
+		start(src: string) {
+			return src.match(/^[ \t]*>\s*\[!/)?.index ?? -1;
+		},
+		tokenizer(src: string) {
+			const header = /^([ \t]*)>\s*\[!([a-zA-Z0-9-]+)\]([^\n]*)?(\n|$)/.exec(src);
+			if (!header) return undefined;
+			const typeName = header[2].toLowerCase();
+			const title = header[3]?.trim();
+			// Collect continuation lines (each must start with '>'); stop at a
+			// line that opens a new callout or at non-quote content.
+			let rest = src.slice(header[0].length);
+			const bodyLines: string[] = [];
+			while (true) {
+				const line = /^(> ?)(.*?)(\n|$)/.exec(rest);
+				if (!line) break;
+				bodyLines.push(line[2]);
+				rest = rest.slice(line[0].length);
+				if (line[2].trim().startsWith("[!")) break; // next callout begins
+			}
+			const raw = header[0] + bodyLines.map((l) => "> " + l).join("\n");
+			const innerText = bodyLines.join("\n");
+			return {
+				type: "callout",
+				raw,
+				typeName,
+				title,
+				tokens: this.lexer.blockTokens(innerText),
+			};
+		},
+		renderer(token: any) {
+			const body = this.parser.parse(token.tokens);
+			const typeName = normalizeCalloutType(token.typeName);
+			const title = token.title || defaultCalloutTitle(typeName);
+			return (
+				'<aside class="callout" data-callout="' +
+				typeName +
+				'"><div class="callout-title"><span class="callout-icon"></span><span class="callout-label">' +
+				title +
+				'</span></div><div class="callout-body">' +
+				body +
+				"</div></aside>"
+			);
+		},
+	};
+}
+
+/** Obsidian callout aliases → canonical type names (keep CSS finite). */
+const CALLOUT_ALIASES: Record<string, string> = {
+	// canonical: note, abstract, info, todo, tip, success, question,
+	// warning, failure, danger, bug, example, quote
+	abstract: "abstract",
+	summary: "abstract",
+	tldr: "abstract",
+	info: "info",
+	todo: "todo",
+	tip: "tip",
+	hint: "tip",
+	important: "tip",
+	success: "success",
+	check: "success",
+	done: "success",
+	question: "question",
+	help: "question",
+	faq: "question",
+	warning: "warning",
+	caution: "warning",
+	attention: "warning",
+	failure: "failure",
+	fail: "failure",
+	missing: "failure",
+	danger: "danger",
+	error: "danger",
+	bug: "bug",
+	example: "example",
+	quote: "quote",
+	cite: "quote",
+	note: "note",
+};
+
+function normalizeCalloutType(raw: string): string {
+	return CALLOUT_ALIASES[raw] ?? "default";
+}
+
+function defaultCalloutTitle(typeName: string): string {
+	return typeName.charAt(0).toUpperCase() + typeName.slice(1);
+}
 
 const marked = new Marked(
 	markedHighlight({
@@ -24,7 +131,7 @@ const marked = new Marked(
 	}),
 );
 
-const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+marked.use({ extensions: [calloutExtension()] });
 
 export function extractWikiLinks(markdown: string): string[] {
 	const slugs = new Set<string>();

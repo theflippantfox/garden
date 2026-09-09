@@ -14,38 +14,33 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		min-height: 60vh;
+		min-height: 100dvh;
 		gap: 1rem;
 		text-align: center;
 	}
-
 	.error-code {
-		font-size: 5rem;
+		font-size: 6rem;
 		font-weight: 700;
-		color: var(--text-primary);
+		color: var(--text);
 		font-family: 'JetBrains Mono', monospace;
 		line-height: 1;
+		opacity: 0.8;
 	}
-
 	.error-message {
 		font-size: 1.1rem;
 		color: var(--text-secondary);
 		max-width: 40ch;
 	}
-
 	.back-link {
-		margin-top: 0.5rem;
-		padding: 0.5rem 1.25rem;
-		background: var(--bg-elevated);
+		margin-top: 0.75rem;
+		padding: 0.6rem 1.5rem;
+		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 6px;
-		color: var(--text-primary);
+		border-radius: var(--radius-md);
+		color: var(--text);
 		text-decoration: none;
 		font-size: 0.9rem;
-		transition: border-color 0.2s;
+		transition: border-color 200ms;
 	}
-
-	.back-link:hover {
-		border-color: var(--accent);
-	}
+	.back-link:hover { border-color: var(--accent); }
 </style>

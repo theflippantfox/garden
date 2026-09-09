@@ -52,6 +52,27 @@
 </div>
 
 <style>
+	:root {
+		--bg: #0a0a12;
+		--surface: #12121e;
+		--surface-hover: #1a1a2a;
+		--border: #1e1e30;
+		--border-subtle: #141425;
+		--text: #e8e8f0;
+		--text-secondary: #8888a0;
+		--text-muted: #555570;
+		--accent: #7c6aef;
+		--accent-hover: #9585f5;
+		--accent-subtle: rgba(124, 106, 239, 0.1);
+		--link: #6da0ef;
+		--code-bg: #0e0e1a;
+		--code-inline-bg: #161625;
+		--radius-sm: 6px;
+		--radius-md: 10px;
+		--radius-lg: 14px;
+		--shadow: 0 2px 12px rgba(0, 0, 0, 0.4);
+	}
+
 	:global(*) {
 		box-sizing: border-box;
 	}
@@ -60,17 +81,17 @@
 		margin: 0;
 		padding: 0;
 		font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-		background: #0a0a0f;
-		color: #e4e4e7;
+		background: var(--bg);
+		color: var(--text);
 		line-height: 1.6;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
 	}
 
 	:global(a) {
-		color: #60a5fa;
+		color: var(--link);
 		text-decoration: none;
-		transition: color 0.15s ease;
+		transition: color 200ms ease;
 	}
 
 	:global(a:hover) {
@@ -83,17 +104,17 @@
 	}
 
 	:global(:not(pre) > code) {
-		background: #1a1a24;
-		color: #a78bfa;
+		background: var(--code-inline-bg);
+		color: var(--accent);
 		padding: 0.15em 0.4em;
 		border-radius: 4px;
-		border: 1px solid #27272f;
+		border: 1px solid var(--border);
 	}
 
 	:global(pre) {
-		background: #0f0f14;
-		border: 1px solid #1f1f28;
-		border-radius: 8px;
+		background: var(--code-bg);
+		border: 1px solid var(--border);
+		border-radius: var(--radius-md);
 		padding: 1.25rem;
 		overflow-x: auto;
 		font-size: 0.9rem;
@@ -104,10 +125,10 @@
 		background: none;
 		padding: 0;
 		border: none;
-		color: #e4e4e7;
+		color: var(--text);
 	}
 
-	/* Highlight.js theme adjustments for dark mode */
+	/* Highlight.js theme adjustments */
 	:global(.hljs-keyword) {
 		color: #c084fc;
 	}
@@ -115,13 +136,28 @@
 		color: #86efac;
 	}
 	:global(.hljs-title) {
-		color: #60a5fa;
+		color: var(--link);
 	}
 	:global(.hljs-comment) {
-		color: #6b7280;
+		color: #555570;
 	}
 	:global(.hljs-function) {
 		color: #fbbf24;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	@keyframes pulse {
+		0%, 100% {
+			opacity: 0.3;
+		}
+		50% {
+			opacity: 0.6;
+		}
 	}
 
 	.app {
